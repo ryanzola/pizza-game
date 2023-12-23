@@ -1,0 +1,60 @@
+:root {
+  color-scheme: light dark;
+  background-color: #242424;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  @apply 
+    min-w-[375px] h-screen
+}
+
+#app {
+  @apply h-screen pb-[88px];
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+button {
+  @apply
+    rounded-lg
+    px-5 py-2
+    text-base font-normal
+    bg-gray-800
+    border border-transparent 
+    focus:outline-4 
+    focus-visible:outline-4 
+    focus:outline-indigo-700
+    focus-visible:outline-indigo-700
+    hover:border-indigo-700
+    transition-colors duration-200 ease-out;
+}
+
+.card {
+  padding: 2em;
+}
+
+#app {
+  @apply max-w-[1280px] mx-auto;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+  a:hover {
+    color: #747bff;
+  }
+  button {
+    background-color: #f9f9f9;
+  }
+}

@@ -1,0 +1,35 @@
+# Django #
+##########
+*.log
+*.pot
+*.pyc
+__pycache__
+db.sqlite3
+media
+
+# Backup files #
+################
+*.bak
+
+# If you are using PyCharm #
+#############################
+.idea/
+
+# Python virtual environment #
+##############################
+venv/
+keys/*
+
+# OS generated files #
+######################
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Environtment Variables #
+##########################
+.env

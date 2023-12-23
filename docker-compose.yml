@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  server:
+    build:
+      context: ./services/server
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./services/server:/app
+    ports:
+      - "8000:8000"
+    environment:
+      PYTHONDONTWRITEBYTECODE: 1
+      PYTHONUNBUFFERED: 1
+
+  client:
+    build:
+      context: ./services/web
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./services/web:/app
+      - /app/node_modules
+    ports:
+      - "8080:8080"
+    environment:
+      NODE_ENV: development
