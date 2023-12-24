@@ -6,9 +6,13 @@ import axios from 'axios'
 const store = createStore({
   state () {
     return {
-      user: null,
-      user_token: null,
-      bank: 50.00,
+      user: {
+        token: null,
+        profile: {
+          bank_amount: 0.00,
+          savings_amount: 0.00
+        }
+      },
       orders: [],
       selected_orders: [],
       past_orders: [],

@@ -2,7 +2,7 @@
   <div class="hero">
     <!-- <img src="../assets/pizzeria.jpg" alt="the pizzeria storefront"> -->
     <h1>Bank</h1>
-    <p class="mb-4">Balance: ${{ bank.toFixed(2) }}</p>
+    <p class="mb-4">Balance: ${{ user.profile.bank_amount.toFixed(2) }}</p>
   </div>
 
   <ul class="space-y-2">
@@ -20,7 +20,7 @@ export default {
     Order
   },
   computed: {
-    ...mapState(['bank', 'selected_orders'])
+    ...mapState(['user', 'selected_orders'])
   },
   mounted() {
     // get bank from the vuex store

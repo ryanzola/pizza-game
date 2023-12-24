@@ -2,7 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDuA1-gF45FSpuc4VbxJWqoGEccJ3TR6K8",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: "pizzamango-376923.firebaseapp.com",
   projectId: "pizzamango-376923",
   storageBucket: "pizzamango-376923.appspot.com",
