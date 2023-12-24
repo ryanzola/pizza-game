@@ -26,6 +26,9 @@ const store = createStore({
     bank (state) {
       return state.bank
     },
+    selected_orders (state) {
+      return state.selected_orders
+    }
   },
   mutations: {
     TOGGLE_DEBUG_MODE(state) {

@@ -36,14 +36,21 @@ export default {
         const result = await signInWithPopup(auth, provider);
         const token = await result.user.getIdToken();
 
-        console.log('token', token);
-
         const response = await axios.post('/auth/google_login/', { token: token });
-        // Store your Django backend token and update user state
+
+        const user = {
+          displayName: result.user.displayName,
+          photoURL: result.user.photoURL,
+          email: result.user.email,
+          uid: result.user.uid,
+          profile: response.data.profile,
+          token: response.data.token
+        }
+
+        this.$store.commit('SET_USER', user);
+        this.$store.commit('SET_USER_TOKEN', response.data.token);
         localStorage.setItem('userToken', response.data.token);
         axios.defaults.headers.common['Authorization'] = `Token ${response.data.token}`;
-        this.$store.commit('SET_USER_TOKEN', response.data.token);
-        this.$store.commit('SET_USER', result.user);
       } catch (error) {
         console.error('Error during backend authentication:', error);
         // Handle errors here

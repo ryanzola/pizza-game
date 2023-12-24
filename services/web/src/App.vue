@@ -1,5 +1,5 @@
 <template>
-  <div class="h-full flex flex-col" v-if="user">
+  <div class="h-full flex flex-col" v-if="user.token">
     <router-view/>
     <Navbar />
   </div>

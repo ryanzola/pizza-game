@@ -2,17 +2,19 @@
   <div class="hero">
     <!-- <img src="../assets/pizzeria.jpg" alt="the pizzeria storefront"> -->
     <h1>Bank</h1>
-    <p class="mb-4">Balance: ${{ user.profile.bank_amount.toFixed(2) }}</p>
+    <p class="mb-4">Balance: ${{ user.profile.bank_amount }}</p>
   </div>
 
-  <ul class="space-y-2">
+  <ul v-if="selected_orders.lenght" class="space-y-2">
     <Order v-for="order in selected_orders" :key="order.id" :order="order" @change="toggleOrderSelection" />
   </ul>
+
+  <p v-else>No orders selected</p>
 </template>
 
 <script>
 import Order from "../components/Order.vue";
-import { mapState } from 'vuex'
+import { mapGetters } from 'vuex'
 
 export default {
   name: 'Bank',
@@ -20,11 +22,10 @@ export default {
     Order
   },
   computed: {
-    ...mapState(['user', 'selected_orders'])
+    ...mapGetters(['user', 'selected_orders'])
   },
   mounted() {
-    // get bank from the vuex store
-    // if the bank is null, redirect to the home page
+    console.log('user', this.user)
   },
   methods: {
     toggleOrderSelection(order) {
