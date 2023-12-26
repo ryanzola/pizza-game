@@ -24,7 +24,7 @@ axios.defaults.baseURL = process.env.NODE_ENV === 'development'
 function initializeAxiosAuthentication() {
   console.log("Initializing Axios Authentication...")
   const store = JSON.parse(localStorage.getItem('vuex'));
-  if (store.user && store.user.token) {
+  if (store && store.user && store.user.token) {
     console.log("Setting Axios Authentication...")
     axios.defaults.headers.common['Authorization'] = `Token ${store.user.token}`;
   }
