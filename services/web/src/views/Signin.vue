@@ -47,21 +47,12 @@ export default {
         const result = await signInWithPopup(auth, provider);
         const token = await result.user.getIdToken();
 
-        const response = await axios.post('/auth/google_login/', { token: token });
+        const { data } = await axios.post('/auth/google_login/', { token: token });
 
-        const user = {
-          displayName: result.user.displayName,
-          photoURL: result.user.photoURL,
-          email: result.user.email,
-          uid: result.user.uid,
-          profile: response.data.profile,
-          token: response.data.token
-        }
-
-        this.$store.commit('SET_USER', user);
-        this.$store.commit('SET_USER_TOKEN', response.data.token);
-        localStorage.setItem('userToken', response.data.token);
-        axios.defaults.headers.common['Authorization'] = `Token ${response.data.token}`;
+        this.$store.commit('SET_USER', data.user);
+        this.$store.commit('SET_USER_TOKEN', data.token);
+        localStorage.setItem('userToken', data.token);
+        axios.defaults.headers.common['Authorization'] = `Token ${data.token}`;
 
         this.$router.push('/home');
       } catch (error) {

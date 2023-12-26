@@ -22,8 +22,11 @@ const store = createStore({
     user (state) {
       return state.user
     },
-    bank (state) {
-      return state.bank
+    bank_amount (state) {
+      return state.user.bank_amount
+    },
+    savings_amount (state) {
+      return state.user.savings_amount
     },
     selected_orders (state) {
       return state.selected_orders
@@ -37,10 +40,12 @@ const store = createStore({
       state.user = data
     },
     SET_USER_TOKEN (state, token) {
+      axios.defaults.headers.common['Authorization'] = `Token ${token}`;
       state.user_token = token
     },
-    SET_BANK (state, bank) {
-      state.bank = bank
+    SET_BANK (state, { bank_amount, savings_amount }) {
+      state.user.bank_amount = bank_amount
+      state.user.savings_amount = savings_amount
     },
     SET_ORDERS (state, orders) {
       state.orders = [...state.orders, ...orders];
@@ -62,6 +67,10 @@ const store = createStore({
         await signOut(auth);
         console.log("Signed out successfully.");
         commit('SET_USER', null);
+        commit('SET_USER_TOKEN', null);
+
+        localStorage.removeItem('vuex');
+        localStorage.removeItem('userToken');
       }
       catch (error) {
         console.error("Error during sign out:", error);
@@ -101,7 +110,17 @@ const store = createStore({
         console.error('Failed to fetch new order:', error)
         throw error // or handle it differently if needed
       }
-    }
+    },
+    async set_savings({ commit }) {
+      try {
+        const { data } = await axios.post('/auth/set_savings/')
+
+        commit('SET_BANK', data)
+      } catch (error) {
+        console.error('Failed to deposit:', error)
+        throw error // or handle it differently if needed
+      }
+    },
   },
   plugins: [createPersistedState({
     paths: ['user', 'debug_mode'] // Specify only the state you want to persist

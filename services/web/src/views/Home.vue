@@ -1,6 +1,6 @@
 <template>
   <div class="hero">
-    <p class="absolute top-0 right-0 bg-black bg-opacity-40 text-xs p-1 rounded-bl z-10">v0.12.20.14.29</p>
+    <p class="absolute top-0 right-0 bg-black bg-opacity-40 text-xs p-1 rounded-bl z-10">v0.12.26.14.41</p>
     <img src="../assets/pizzeria.jpg" alt="the pizzeria storefront">
     <div class="locator store" v-if="isNearPizzeria">
       You are at the store
@@ -101,45 +101,6 @@ export default {
     this.intervalID = setInterval(() => {
       this.checkAndUpdateOrderStatus();
     }, 500);
-
-    // const ordersCollection = collection(db, "orders");
-    // const q = query(
-    //   ordersCollection,
-    //   where("status", "in", ["ready", "pending"])
-    // );
-
-    // const orderSnapshot = await getDocs(q);
-
-    // const fetchOrderData = async (orderDoc) => {
-
-    //   let orderData = {
-    //     id: orderDoc.id,
-    //     refData: {},
-    //     ...orderDoc.data()
-    //   };
-
-    //   if(orderData.town_id) {
-    //     // Fetch the reference document
-    //     const townDoc = await getDoc(orderData.town_id);
-    //     // Add the reference data to the order data
-    //     const townData = townDoc.data();
-    //     orderData.refData.town = townData.town_name;
-    //   }
-
-    //   if (orderData.address_id) {
-    //     // Fetch the reference document
-    //     const addressDoc = await getDoc(orderData.address_id);
-    //     // Add the reference data to the order data
-    //     const addressData = addressDoc.data();
-    //     orderData.refData = {...orderData.refData, ...addressData};
-    //   }
-
-    //   return orderData;
-    // };
-
-    // // Fetch all orders with their associated reference data
-    // this.orders = await Promise.all(orderSnapshot.docs.map(fetchOrderData));
-
   },
   beforeDestroy() {
     // Clear the watcher when component is destroyed.
@@ -249,7 +210,7 @@ export default {
     setDeliveries() {
       this.$store.commit('SET_SELECTED_ORDERS', this.selected);
 
-      this.$router.push('/bank');
+      this.$router.push('/deliveries');
     },
     getNewOrder() {
       this.loading = true;

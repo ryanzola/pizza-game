@@ -1,8 +1,8 @@
 <template>
-  <div class="h-full flex flex-col">
+  <main class="h-full flex flex-col">
     <router-view/>
-    <Navbar v-if="$store.getters.isAuthenticated" />
-  </div>
+  </main>
+  <Navbar v-if="$store.getters.isAuthenticated" />
 </template>
 
 <script>

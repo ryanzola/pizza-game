@@ -30,6 +30,7 @@ def google_login(request):
         user_id = id_info['sub']
         email = id_info['email']
         name = id_info['name']
+        picture = id_info['picture']
 
         user = User.objects.filter(email=email).first()
 
@@ -38,7 +39,14 @@ def google_login(request):
             user.save()
 
             # Create a Profile for the user
-            profile = Profile.objects.create(user=user, name=name, bank_amount=0)
+            profile = Profile.objects.create(
+                user=user,
+                email=email,
+                name=name, 
+                bank_amount=0,
+                savings_amount=0,
+                picture=picture,
+            )
             profile.save()
 
         # fetch the profile associated with the user
@@ -47,7 +55,7 @@ def google_login(request):
 
         auth_token, created = Token.objects.get_or_create(user=user)
 
-        return Response({'token': auth_token.key, 'profile': profile_serializer.data }, status=200)
+        return Response({'token': auth_token.key, 'user': profile_serializer.data }, status=200)
 
     except ValueError:
         return Response({'error': 'Invalid Google ID token'}, status=400)
@@ -77,12 +85,16 @@ def update_bank_amount(user_id, amount):
 # set_savings will also set the bank_amount to 0
 @api_view(['POST'])
 def set_savings(request):
-    user_id = request.data.get('user_id')
-    user = User.objects.filter(id=user_id).first()
+    user = request.user
     profile = Profile.objects.filter(user=user).first()
 
-    profile.savings_amount = profile.savings_amount + profile.bank_amount
-    profile.bank_amount = 0
-    profile.save()
+    # It's good to check if the profile exists
+    if profile:
+        profile.savings_amount += profile.bank_amount
+        profile.bank_amount = 0
+        profile.save()
 
-    return Response({'savings_amount': profile.savings_amount}, status=200)
+        return Response({ 'savings_amount': profile.savings_amount, 'bank_amount': profile.bank_amount }, status=200)
+    else:
+        # Handle the case where the profile doesn't exist
+        return Response({"error": "Profile not found"}, status=404)

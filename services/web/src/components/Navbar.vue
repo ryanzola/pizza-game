@@ -4,17 +4,17 @@
       <HomeIcon />
     </router-link>
 
-    <router-link to="/bank">
-      <CurrencyDollarIcon />
-    </router-link>
-
     <router-link to="/deliveries">
       <MapPinIcon />
     </router-link>
 
+    <router-link to="/bank">
+      <CurrencyDollarIcon />
+    </router-link>
+
     <router-link to="/info">
       <div v-if="user" class="h-6 w-6 rounded-full overflow-hidden">
-        <img class="h-full w-full" :src="user.photoURL" alt="user.displayName" referrerpolicy="no-referrer">
+        <img class="h-full w-full" :src="user.picture" alt="user.displayName" referrerpolicy="no-referrer">
       </div>
       <InformationCircleIcon v-else />
     </router-link>
