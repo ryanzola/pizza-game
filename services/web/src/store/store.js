@@ -3,16 +3,12 @@ import { signOut } from "firebase/auth";
 import auth from '../firebase/init'
 import axios from 'axios'
 
+import createPersistedState from "vuex-persistedstate";
+
 const store = createStore({
   state () {
     return {
-      user: {
-        token: null,
-        profile: {
-          bank_amount: 0.00,
-          savings_amount: 0.00
-        }
-      },
+      user: null,
       orders: [],
       selected_orders: [],
       past_orders: [],
@@ -20,6 +16,9 @@ const store = createStore({
     }
   },
   getters: {
+    isAuthenticated (state) {
+      return !!state.user
+    },
     user (state) {
       return state.user
     },
@@ -103,7 +102,10 @@ const store = createStore({
         throw error // or handle it differently if needed
       }
     }
-  }
+  },
+  plugins: [createPersistedState({
+    paths: ['user', 'debug_mode'] // Specify only the state you want to persist
+  })],
 })
 
 export default store

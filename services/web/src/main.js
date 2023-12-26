@@ -20,6 +20,18 @@ axios.defaults.baseURL = process.env.NODE_ENV === 'development'
                          ? 'http://localhost:8000/api/v1' 
                          : import.meta.env.VITE_API_URL;
 
+// Function to set the auth token for Axios
+function initializeAxiosAuthentication() {
+  console.log("Initializing Axios Authentication...")
+  const store = JSON.parse(localStorage.getItem('vuex'));
+  if (store.user && store.user.token) {
+    console.log("Setting Axios Authentication...")
+    axios.defaults.headers.common['Authorization'] = `Token ${store.user.token}`;
+  }
+}
+
+initializeAxiosAuthentication();
+
 
 const app = createApp(App)
 app.use(router)

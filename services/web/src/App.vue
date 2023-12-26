@@ -1,10 +1,7 @@
 <template>
-  <div class="h-full flex flex-col" v-if="user.token">
+  <div class="h-full flex flex-col">
     <router-view/>
-    <Navbar />
-  </div>
-  <div v-else>
-    <Signin />
+    <Navbar v-if="$store.getters.isAuthenticated" />
   </div>
 </template>
 

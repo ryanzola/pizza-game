@@ -9,6 +9,11 @@
   -webkit-text-size-adjust: 100%;
 }
 
+* {
+  /* remove overscroll behavior */
+  overscroll-behavior: none;
+}
+
 body {
   @apply 
     min-w-[375px] h-screen

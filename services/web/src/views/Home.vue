@@ -30,14 +30,20 @@
     <Order v-for="order in orders" :key="order.id" :order="order" @change="toggleOrderSelection" />
   </ul>
 
-  <button v-if="selected.length === 0" class="order-btn" @click="$store.dispatch('fetchNewOrder')">Get New Order</button>
+  <button v-if="selected.length === 0" class="order-btn" @click="getNewOrder">Get New Order</button>
   <button v-else class="order-btn" @click="setDeliveries">
     Take Deliveries
-
     <ChevronDoubleRightIcon class="absolute right-4 top-1/2 transform translate-y-[-50%] w-6 h-6" />
   </button>
 
   <p class="text-center font-bold bg-red-500" v-show="!locationAvailable">Geolocation is not available or not permitted.</p>
+
+  <div class="h-screen w-screen fixed inset-0 grid place-items-center bg-black bg-opacity-30" v-if="loading">
+    <svg class="animate-spin h-12 w-12" viewBox="0 0 50 50">
+      <circle cx="25" cy="25" r="20" fill="none" stroke="white" stroke-width="5" stroke-linecap="round"
+              stroke-dasharray="100, 100" transform="rotate(-90, 25, 25)"></circle>
+    </svg>
+  </div>
 </template>
 
 <script>
@@ -62,7 +68,8 @@ export default {
       thresholdDistance: 50, // 50 meters as an example threshold
       intervalID: null,
       currentWaitTime: 0,
-      selected: []
+      selected: [],
+      loading: false,
     };
   },
   computed: {
@@ -243,6 +250,16 @@ export default {
       this.$store.commit('SET_SELECTED_ORDERS', this.selected);
 
       this.$router.push('/bank');
+    },
+    getNewOrder() {
+      this.loading = true;
+
+      this.$store.dispatch('fetchNewOrder').then(() => {
+        this.loading = false;
+      })
+      .finally(() => {
+        this.loading = false;
+      });
     }
   }
 };
@@ -277,6 +294,7 @@ h2 {
 .order-btn {
   @apply
     relative 
+    py-4
     w-full 
     rounded-none
     border-none
