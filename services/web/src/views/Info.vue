@@ -16,43 +16,21 @@
   <section>
     <h2 class="text-2xl font-bold text-white">Achievements</h2>
 
-    <div class="grid grid-cols-1 gap-2">
+    <ul class="grid grid-cols-1 gap-2">
       <Achievement 
-        color="blue-200"
-        title="Rookie"
-        description="Your journey begins with a single delivery. Welcome to the world of pizza!"
-        date="12 Dec 2023"
+        v-for="achievement in sortedAchievements"
+        :title="achievement.title"
+        :description="achievement.description"
+        :date="achievement.date"
       />
 
-      <Achievement
-        title="Centurion"
-        description="A hundred deliveries mastered. You're a true warrior of the pizza delivery world!"
-      />
-
-      <Achievement
-        title="Elite"
-        description="Five hundred deliveries! You're at the top, an elite deliverer with unmatched dedication."
-      />
-      
-      <Achievement
-        color="green-200"
-        title="Nestegg"
-        description="You've planted the seed of your financial future. Watch it grow as you continue your journey!"
-        date="08 Dec 2023"
-      />
-
-      <Achievement
-        title="Supersaver"
-        description="Twenty bank trips show your dedication to saving. You're a true supersaver, wisely securing your future one deposit at a time."
-      />
-    </div>
+    </ul>
   </section>
 
   <section>
     <div class="flex items-center justify-between">
       <h2 class="text-2xl font-bold text-white">Developer Mode</h2>
-      <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
-        <input class="toggle-checkbox hidden" id="toggle" type="checkbox" name="toggle" />
+      <div class="relative pr-4">
         <label for="debug" class="cursor-pointer">
           <input 
             class="scale-150"
@@ -76,14 +54,6 @@
 section {
   @apply p-2 last:pb-24 space-y-4;
 }
-.achievement-card {
-  @apply 
-    relative
-    overflow-hidden
-    rounded-lg
-    text-gray-900
-    shadow;
-}
 </style>
 
 <script>
@@ -97,7 +67,43 @@ export default {
   },
   data() {
     return {
-      orders: []
+      achievements: [
+        {
+          title: 'Rookie',
+          description: 'Your journey begins with a single delivery. Welcome to the world of pizza!',
+          date: '12 Dec 2023'
+        },
+        {
+          title: 'Centurion',
+          description: 'A hundred deliveries mastered. You\'re a true warrior of the pizza delivery world!',
+          date: null,
+        },
+        {
+          title: 'Elite',
+          description: 'Five hundred deliveries! You\'re at the top, an elite deliverer with unmatched dedication.',
+          date: null,
+        },
+        {
+          title: 'Nestegg',
+          description: 'You\'ve planted the seed of your financial future. Watch it grow as you continue your journey!',
+          date: '08 Dec 2023'
+        },
+        {
+          title: 'Supersaver',
+          description: 'Twenty bank trips show your dedication to saving. You\'re a true supersaver, wisely securing your future one deposit at a time.',
+          date: null,
+        }
+      ],
+    }
+  },
+  computed: {
+    sortedAchievements() {
+      // sort achievements by if date is null or not
+      return this.achievements.sort((a, b) => {
+        if (a.date === null) return 1
+        if (b.date === null) return -1
+        return 0
+      })
     }
   },
   async mounted() {

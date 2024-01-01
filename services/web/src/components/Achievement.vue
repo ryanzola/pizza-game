@@ -1,14 +1,15 @@
 <template>
-  <div :class="`achievement-card bg-${color}`" data-v0-t="card">
-    <div class="p-5 text-center">
+  <div :class="['achievement-card', color]">
+    <div class="h-16 w-16 min-w-[64px]">
+      <img v-if="date" src="../assets/achievement-checked.svg" alt="" class="w-full h-full" />
+      <img v-else="date" src="../assets/achievement-empty.svg" alt="" class="w-full h-full" />
+    </div>
+
+    <div class="space-y-2">
       <h3 v-if="date" class="text-lg font-semibold">{{ title }}</h3>
       <h3 v-else class="text-lg font-semibold">???</h3>
       
       <p v-if="date" class="text-xs">{{ description }}</p>
-      <p v-else class="text-xs">???</p>
-
-      <img v-if="date" src="../assets/achievement-checked.svg" alt="" class="w-16 h-16 mx-auto my-2" />
-      <img v-else="date" src="../assets/achievement-empty.svg" alt="" class="w-16 h-16 mx-auto my-2" />
 
       <div v-if="date" class="text-indigo-500 text-sm">Unlocked on {{ date }}</div>
     </div>
@@ -19,10 +20,6 @@
 export default {
   name: 'Achievement',
   props: {
-    color: {
-      type: String,
-      default: 'gray-300'
-    },
     title: {
       type: String,
       default: 'Title'
@@ -35,12 +32,30 @@ export default {
       type: String,
       default: null
     }
+  },
+  data() {
+    return {
+      colors: [
+        'bg-blue-200',
+        'bg-green-200',
+        'bg-yellow-200',
+        'bg-red-200',
+        'bg-pink-200',
+        'bg-purple-200',
+        'bg-indigo-200',
+      ]
+    }
+  },
+  computed: {
+    color() {
+      return this.date ? this.colors[Math.floor(Math.random() * this.colors.length)] : 'bg-gray-200'
+    }
   }
 }
 </script>
 
 <style scoped>
 .achievement-card {
-  @apply relative overflow-hidden rounded-lg text-gray-900 shadow;
+  @apply p-4 flex items-center gap-4 relative rounded text-gray-900;
 }
 </style>

@@ -1,16 +1,18 @@
 <template>
   <div class="hero">
-    <p class="absolute top-0 right-0 bg-black bg-opacity-40 text-xs p-1 rounded-bl z-10">v0.12.26.14.41</p>
-    <img src="../assets/pizzeria.jpg" alt="the pizzeria storefront">
+    <p class="absolute top-0 right-0 bg-black bg-opacity-40 text-xs p-1 rounded-bl z-10">v1.01.01.13.37</p>
+    <img v-if="isNearRestaurantDepot" src="../assets/depot.png" alt="the pizzeria storefront">
+    <img v-else src="../assets/pizzeria.jpg" alt="the pizzeria storefront">
+
     <div class="locator store" v-if="isNearPizzeria">
       You are at the store
     </div>
 
-    <div class="locator not-store" v-else>
+    <div class="locator not-store" v-if="!isNearPizzeria && !isNearRestaurantDepot">
       You are not at the store
     </div>
 
-    <div class="wait-time">
+    <div class="wait-time" v-if="!isNearRestaurantDepot">
       Current Wait Time: {{ Math.floor(currentWaitTime / 1000 / 60) }} minutes
     </div>
 
@@ -30,7 +32,8 @@
     <Order v-for="order in orders" :key="order.id" :order="order" @change="toggleOrderSelection" />
   </ul>
 
-  <button v-if="selected.length === 0" class="order-btn" @click="getNewOrder">Get New Order</button>
+  <button v-if="isNearRestaurantDepot" class="order-btn" @click="() => {}">Restock Pizzeria</button>
+  <button v-else-if="selected.length === 0" class="order-btn" @click="getNewOrder">Get New Order</button>
   <button v-else class="order-btn" @click="setDeliveries">
     Take Deliveries
     <ChevronDoubleRightIcon class="absolute right-4 top-1/2 transform translate-y-[-50%] w-6 h-6" />
@@ -63,9 +66,16 @@ export default {
       longitude: null,
       locationAvailable: false,
       watcher: null,
-      pizzeriaLat: 40.86233731197237,
-      pizzeriaLon: -74.07808261920567,
-      thresholdDistance: 50, // 50 meters as an example threshold
+      lastVisited: null,
+      pizzaCoords: {
+        latitude: 40.86233731197237,
+        longitude: -74.07808261920567,
+      },
+      depotCoords: {
+        latitude: 40.868516031424704,
+        longitude: -74.04757385194837,
+      },
+      thresholdDistance: 100, // 50 meters as an example threshold
       intervalID: null,
       currentWaitTime: 0,
       selected: [],
@@ -79,8 +89,20 @@ export default {
         const distance = this.getDistanceFromLatLonInM(
           this.latitude,
           this.longitude,
-          this.pizzeriaLat,
-          this.pizzeriaLon
+          this.pizzaCoords.latitude,
+          this.pizzaCoords.longitude
+        );
+        return distance <= this.thresholdDistance;
+      }
+      return false;
+    },
+    isNearRestaurantDepot() {
+      if (this.latitude && this.longitude) {
+        const distance = this.getDistanceFromLatLonInM(
+          this.latitude,
+          this.longitude,
+          this.depotCoords.latitude,
+          this.depotCoords.longitude
         );
         return distance <= this.thresholdDistance;
       }
