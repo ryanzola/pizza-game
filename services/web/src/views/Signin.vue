@@ -23,9 +23,6 @@ import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 
 export default {
   name: 'SignIn',
-  mounted() {
-
-  },
   data() {
     return {
       error: null
@@ -56,7 +53,7 @@ export default {
 
         this.$router.push('/');
       } catch (error) {
-        console.error('Error during backend authentication:', error);
+        console.error('Error during authentication:', error);
         // Handle errors here
       }
     },

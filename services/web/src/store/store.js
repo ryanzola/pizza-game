@@ -16,6 +16,7 @@ const store = createStore({
     return {
       user: null,
       debug_mode: true,
+      version: '1.07.01.23.40'
     }
   },
   getters: {

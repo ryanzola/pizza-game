@@ -1,6 +1,6 @@
 <template>
   <div class="hero">
-    <p class="absolute top-0 right-0 bg-black bg-opacity-40 text-xs p-1 rounded-bl z-10">v1.01.01.13.37</p>
+    <p class="absolute top-0 right-0 bg-black bg-opacity-40 text-xs p-1 rounded-bl z-10">v{{ version }}</p>
     <img v-if="isNearRestaurantDepot" src="../assets/depot.png" alt="the pizzeria storefront">
     <img v-else src="../assets/pizzeria.jpg" alt="the pizzeria storefront">
 
@@ -67,6 +67,7 @@ export default {
     };
   },
   computed: {
+    ...mapState(['version']),
     ...mapState('location', ['locationAvailable']),
     ...mapGetters('location', ['isNearPizzeria', 'isNearRestaurantDepot']),
     ...mapGetters('orders', ['orders']),

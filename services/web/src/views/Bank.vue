@@ -1,6 +1,6 @@
 <template>
   <div class="hero">
-    <p class="absolute top-0 right-0 bg-black bg-opacity-40 text-xs p-1 rounded-bl z-10">v1.06.28.22.29</p>
+    <p class="absolute top-0 right-0 bg-black bg-opacity-40 text-xs p-1 rounded-bl z-10">v{{ version }}</p>
 
     <div class="locator store" v-if="isNearBank">
       You are at the bank
@@ -30,7 +30,7 @@
 <script>
 import DebugLocation from "../components/DebugLocation.vue";
 import Order from "../components/Order.vue";
-import { mapGetters } from 'vuex'
+import { mapGetters, mapState } from 'vuex'
 
 export default {
   name: 'Bank',
@@ -41,6 +41,7 @@ export default {
   computed: {
     ...mapGetters(['bank_amount', 'savings_amount']),
     ...mapGetters('location', ['isNearBank']),
+    ...mapState(['version'])
   },
   methods: {
     deposit() {
