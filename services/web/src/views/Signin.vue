@@ -36,7 +36,7 @@ export default {
   },
   mounted() {
     if (this.user && this.user.token) {
-      this.$router.push('/home');
+      this.$router.push('/');
     }
   },
   methods: {
@@ -54,7 +54,7 @@ export default {
         localStorage.setItem('userToken', data.token);
         axios.defaults.headers.common['Authorization'] = `Token ${data.token}`;
 
-        this.$router.push('/home');
+        this.$router.push('/');
       } catch (error) {
         console.error('Error during backend authentication:', error);
         // Handle errors here

@@ -9,9 +9,9 @@ import PastDeliveries from './views/PastDeliveries.vue'
 import store from './store/store.js'
 
 const routes = [
-  { path: '/', component: Signin },
+  { path: '/signin', component: Signin },
   {
-    path: '/home',
+    path: '/',
     component: Home,
     meta: { requiresAuth: true },
   },
@@ -45,7 +45,7 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   if (to.matched.some(record => record.meta.requiresAuth)) {
     if (!store.getters.isAuthenticated) {
-      next('/'); // Redirect to home or login page
+      next('/signin'); // Redirect to home or login page
     } else {
       next(); // Proceed to route
     }

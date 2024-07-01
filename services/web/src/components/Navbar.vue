@@ -1,6 +1,6 @@
 <template>
   <nav aria-label="main navigation">
-    <router-link to="/home">
+    <router-link to="/">
       <HomeIcon />
     </router-link>
 
