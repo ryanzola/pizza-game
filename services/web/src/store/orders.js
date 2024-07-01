@@ -82,8 +82,8 @@ const actions = {
       console.log(data)
 
       const newOrder = {
-        id: Math.floor(Math.random() * 1000000),
-        date_placed: new Date(),
+        id: data.id,
+        date_placed: data.date_placed,
         status: 'pending',
         items: data.items,
         total: data.total_cost,

@@ -3,6 +3,7 @@ import logging
 import requests
 import random
 import time
+import uuid
 
 from django.conf import settings
 from django.http import JsonResponse
@@ -135,7 +136,13 @@ def construct_order(request):
         items = get_random_order_from_openai(family_size)
         total_cost, tip = estimated_order_cost(family_size)
 
+        date_placed = time.strftime('%Y-%m-%d %H:%M:%S')
+
         return JsonResponse({
+            # uuid4
+            'id': str(uuid.uuid4()),
+            'date_placed': date_placed,
+            'date_delivered': None,
             'town': formatted_town_name,
             'street': address_obj.street.name,
             'address': address_obj.address,
