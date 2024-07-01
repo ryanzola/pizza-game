@@ -15,17 +15,14 @@
     <div class="wait-time" v-if="!isNearRestaurantDepot">
       Current Wait Time: {{ Math.floor(currentWaitTime / 1000 / 60) }} minutes
     </div>
-
-    <div v-if="$store.state.debug_mode" class="bg-yellow-500 text-black absolute top-0 left-0 rounded-br p-2">
-      <!-- show users lat and lon -->
-      <p>Latitude: {{ latitude }}</p>
-      <p>Longitude: {{ longitude }}</p>
-    </div>
   </div>
 
-  <div class="p-4 pb-0">
-    <h1 class="text-2xl font-bold">Orders</h1>
-    <p :class="{ 'opacity-0': isNearPizzeria }" :aria-hidden="isNearPizzeria">Return to the pizzeria to get more orders</p>
+  <div>
+    <DebugLocation />
+    <div class="p-4">
+      <h1 class="text-2xl font-bold">Orders</h1>
+      <p :class="{ 'opacity-0': isNearPizzeria }" :aria-hidden="isNearPizzeria">Return to the pizzeria to get more orders</p>
+    </div>
   </div>
 
   <ul :class="['orders', { 'transform opacity-50': !isNearPizzeria }]">
@@ -33,8 +30,8 @@
   </ul>
 
   <button v-if="isNearRestaurantDepot" class="order-btn" @click="() => {}">Restock Pizzeria</button>
-  <button v-else-if="selected.length === 0" class="order-btn" @click="getNewOrder">Get New Order</button>
-  <button v-else class="order-btn" @click="setDeliveries">
+  <button v-else-if="selected.length === 0 && $store.state.debug_mode" class="order-btn" @click="getNewOrder">Get New Order</button>
+  <button v-else-if="selected.length > 0" class="order-btn" @click="setDeliveries">
     Take Deliveries
     <ChevronDoubleRightIcon class="absolute right-4 top-1/2 transform translate-y-[-50%] w-6 h-6" />
   </button>
@@ -50,177 +47,32 @@
 </template>
 
 <script>
+import DebugLocation from "../components/DebugLocation.vue";
 import Order from "../components/Order.vue";
-import { mapState } from 'vuex'
+import { mapState, mapGetters, mapActions } from 'vuex'
 import { ChevronDoubleRightIcon } from '@heroicons/vue/24/solid'
 
 export default {
   name: "Home",
   components: {
     ChevronDoubleRightIcon,
+    DebugLocation,
     Order,
   },
   data() {
     return {
-      latitude: null,
-      longitude: null,
-      locationAvailable: false,
-      watcher: null,
-      lastVisited: null,
-      pizzaCoords: {
-        latitude: 40.86233731197237,
-        longitude: -74.07808261920567,
-      },
-      depotCoords: {
-        latitude: 40.868516031424704,
-        longitude: -74.04757385194837,
-      },
-      thresholdDistance: 100, // 50 meters as an example threshold
-      intervalID: null,
       currentWaitTime: 0,
       selected: [],
       loading: false,
     };
   },
   computed: {
-    ...mapState(['orders']),
-    isNearPizzeria() {
-      if (this.latitude && this.longitude) {
-        const distance = this.getDistanceFromLatLonInM(
-          this.latitude,
-          this.longitude,
-          this.pizzaCoords.latitude,
-          this.pizzaCoords.longitude
-        );
-        return distance <= this.thresholdDistance;
-      }
-      return false;
-    },
-    isNearRestaurantDepot() {
-      if (this.latitude && this.longitude) {
-        const distance = this.getDistanceFromLatLonInM(
-          this.latitude,
-          this.longitude,
-          this.depotCoords.latitude,
-          this.depotCoords.longitude
-        );
-        return distance <= this.thresholdDistance;
-      }
-      return false;
-    },
-    orderSelected: {
-      get() {
-        return order => this.selected.includes(order.id);
-      },
-      set() {
-        // This setter is required for v-model but we handle the change with the @change event so we leave this empty
-      }
-    },
-  },
-  async mounted() {
-    this.getGeolocation();
-
-    this.intervalID = setInterval(() => {
-      this.checkAndUpdateOrderStatus();
-    }, 500);
-  },
-  beforeDestroy() {
-    // Clear the watcher when component is destroyed.
-    if (this.watcher) {
-      navigator.geolocation.clearWatch(this.watcher);
-    }
-
-    if (this.intervalID) {
-      clearInterval(this.intervalID);
-    }
+    ...mapState('location', ['locationAvailable']),
+    ...mapGetters('location', ['isNearPizzeria', 'isNearRestaurantDepot']),
+    ...mapGetters('orders', ['orders']),
   },
   methods: {
-    getGeolocation() {
-      if ("geolocation" in navigator) {
-        // Watch position to keep updating the coordinates.
-        this.watcher = navigator.geolocation.watchPosition(
-          position => {
-            this.latitude = position.coords.latitude;
-            this.longitude = position.coords.longitude;
-            this.locationAvailable = true;
-          },
-          error => {
-            console.error(error.message);
-            this.locationAvailable = false;
-          },
-          {
-            enableHighAccuracy: true,
-            timeout: 1000,
-          }
-        );
-      } else {
-        this.locationAvailable = false;
-      }
-    },
-    getDistanceFromLatLonInM(lat1, lon1, lat2, lon2) {
-      const R = 6371e3; // Radius of the Earth in meters
-      const dLat = this.deg2rad(lat2 - lat1);
-      const dLon = this.deg2rad(lon2 - lon1);
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(this.deg2rad(lat1)) *
-          Math.cos(this.deg2rad(lat2)) *
-          Math.sin(dLon / 2) *
-          Math.sin(dLon / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c; // Distance in meters
-    },
-    deg2rad(deg) {
-      return deg * (Math.PI / 180);
-    },
-    checkAndUpdateOrderStatus() {
-      const baseWaitTime = 30 * 60 * 1000; // 30 minutes in milliseconds
-      const multiplier = 1.1;
-
-      // Calculate the additional wait time based on the number of orders
-      const additionalWaitTime = this.orders.length > 6 
-        ? baseWaitTime * (this.orders.length - 6) * multiplier 
-        : 0;
-
-      const totalWaitTime = baseWaitTime + additionalWaitTime;
-      const cancellationTime = totalWaitTime + baseWaitTime;
-
-      // keep track of the most recent wait time
-      this.currentWaitTime = totalWaitTime;
-
-      this.orders.forEach(order => {
-        let newStatus = null;
-        
-        const timeSinceOrderPlaced = Date.now() - new Date(order.date_placed).getTime();
-
-        if (order.refData.latitude && order.refData.longitude) {
-          const distanceToOrder = this.getDistanceFromLatLonInM(
-            this.latitude,
-            this.longitude,
-            order.refData.latitude,
-            order.refData.longitude
-          );
-
-          if (distanceToOrder <= this.thresholdDistance) {
-            newStatus = 'delivered';
-          }
-        }
-
-        if (!newStatus && timeSinceOrderPlaced > cancellationTime) {
-          newStatus = 'cancelled';
-        } else if (timeSinceOrderPlaced > this.currentWaitTime) {
-          newStatus = 'ready';
-        }
-
-        if (newStatus) {
-          console.log(newStatus)
-          this.$store.commit('UPDATE_ORDER_STATUS', {
-            orderId: order.id,
-            status: newStatus
-          });
-        }
-      });
-    },
+    ...mapActions('orders', ['fetchNewOrder']),
     toggleOrderSelection(order) {
       const index = this.selected.findIndex(o => o.id === order.id);
       if (index > -1) {
@@ -231,13 +83,12 @@ export default {
     },
     setDeliveries() {
       this.$store.commit('SET_SELECTED_ORDERS', this.selected);
-
       this.$router.push('/deliveries');
     },
     getNewOrder() {
       this.loading = true;
 
-      this.$store.dispatch('fetchNewOrder').then(() => {
+      this.fetchNewOrder().then(() => {
         this.loading = false;
       })
       .finally(() => {
@@ -286,30 +137,11 @@ h2 {
 
 .wait-time {
   @apply 
-    absolute bottom-0 left-0
+    absolute bottom-0 right-0 left-0
     p-2
-    rounded-tr
     font-bold
-    text-xs
-    text-white text-center
-    bg-blue-700;
-}
-
-.locator {
-  @apply 
-    absolute bottom-0 right-0
-    p-2
-    rounded-tl
-    font-bold
-    text-xs
-    text-white text-center;
-}
-
-.locator.store {
-  @apply bg-green-500;
-}
-
-.locator.not-store {
-  @apply bg-red-500;
+    text-xs text-right
+    text-white
+    bg-gradient-to-r from-transparent from-40% to-blue-600 to-70%;
 }
 </style>

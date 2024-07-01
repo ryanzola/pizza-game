@@ -20,17 +20,15 @@ body {
 }
 
 #app {
-  @apply h-screen pb-[88px];
+  @apply h-[calc(100vh-88px)] mb-[88px];
 }
 
 h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+  @apply text-2xl font-bold;
 }
 
 button {
   @apply
-    rounded-lg
     px-5 py-2
     text-base font-normal
     bg-gray-800
@@ -62,4 +60,20 @@ button {
   button {
     background-color: #f9f9f9;
   }
+}
+
+.locator {
+  @apply 
+    absolute bottom-0 left-0 right-0
+    p-2
+    font-bold
+    text-xs text-white;
+}
+
+.locator.store {
+  @apply bg-gradient-to-r from-green-600 from-10% to-transparent to-70%;
+}
+
+.locator.not-store {
+  @apply bg-gradient-to-r from-red-600 from-30% to-transparent;
 }

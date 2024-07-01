@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-4 p-2 md:p-4">
+  <div class="space-y-4 p-4">
     <div class="grid gap-4 md:grid-cols-3">
       <Card />
       <Card />
@@ -28,6 +28,4 @@ export default {
 };
 </script>
 
-<style scoped>
-
-</style>
+<style scoped></style>

@@ -2,11 +2,11 @@
   <section>
     <div class="flex items-center gap-8">
       <span class="relative flex shrink-0 overflow-hidden rounded-full h-24 w-24">
-        <img class="absolute h-full w-full object-cover" :src="$store.getters.user.picture || '../assets/pizza.svg'" alt="ME">
+        <img class="absolute h-full w-full object-cover" :src="$store.getters.user?.picture || '../assets/pizza.svg'" alt="ME">
       </span>
       <div class="grid gap-0.5 text-sm">
-        <h1 class="font-bold text-2xl text-white">{{ $store.getters.user.name }}</h1>
-        <div class="text-white">{{ $store.getters.user.email }}</div>
+        <h1 class="font-bold text-2xl text-white">{{ $store.getters.user?.name }}</h1>
+        <div class="text-white">{{ $store.getters.user?.email }}</div>
       </div>
     </div>
 
@@ -29,7 +29,10 @@
 
   <section>
     <div class="flex items-center justify-between">
-      <h2 class="text-2xl font-bold text-white">Developer Mode</h2>
+      <div>
+        <h2 class="text-2xl font-bold text-white">Developer Mode</h2>
+        <p class="text-white text-sm">Test features without geolocation.</p>
+      </div>
       <div class="relative pr-4">
         <label for="debug" class="cursor-pointer">
           <input 
@@ -44,15 +47,11 @@
       </div>
     </div>
   </section>
-
-  <section>
-    <router-link to="/info/past-deliveries">Past Deliveries</router-link>
-  </section>
 </template>
 
 <style scoped>
 section {
-  @apply p-2 last:pb-24 space-y-4;
+  @apply p-4 space-y-4;
 }
 </style>
 

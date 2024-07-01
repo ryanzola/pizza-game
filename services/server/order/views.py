@@ -35,7 +35,7 @@ assistant = client.beta.assistants.create(
     Format the response as a markdown list.
     """,
     tools=[],
-    model="gpt-4-1106-preview"
+    model="gpt-4-turbo"
 )
 
 thread = client.beta.threads.create()
@@ -100,9 +100,9 @@ def get_random_order_from_openai(family_size):
                 run_id=run.id
             )
 
-            print(run_status.status)
+            print(run_status)
 
-            if run_status.status == 'completed':
+            if run_status.status == 'completed' or run_status.status == 'failed':
                 break
 
             time.sleep(1)  # Wait for 2 seconds before checking again

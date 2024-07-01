@@ -1,5 +1,5 @@
 <template>
-  <main class="h-full flex flex-col">
+  <main class="h-full flex flex-col overflow-scroll">
     <router-view/>
   </main>
   <Navbar v-if="$store.getters.isAuthenticated" />
@@ -18,9 +18,13 @@ export default {
   computed: {
     ...mapState(['user'])
   },
+  async mounted() {
+    this.$store.dispatch('location/startGeolocation');
+    this.$store.dispatch('location/startInterval');
+  },
+  beforeDestroy() {
+    this.$store.dispatch('location/stopGeolocation');
+    this.$store.dispatch('location/stopInterval');
+  },
 };
 </script>
-
-<style scoped>
-
-</style>

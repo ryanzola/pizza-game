@@ -13,7 +13,7 @@
             Container Queries
           </div>
           <a class="mt-1 block text-lg font-medium leading-tight text-black hover:underline" href="#">
-            The cool new CSS feature
+            Testing container queries
           </a>
 
           <p class="mt-2 text-gray-700">

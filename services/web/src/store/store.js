@@ -2,16 +2,19 @@ import { createStore } from 'vuex'
 import { signOut } from "firebase/auth";
 import auth from '../firebase/init'
 import axios from 'axios'
+import location from './location';
+import orders from './orders';
 
 import createPersistedState from "vuex-persistedstate";
 
 const store = createStore({
+  modules: {
+    location,
+    orders,
+  },
   state () {
     return {
       user: null,
-      orders: [],
-      selected_orders: [],
-      past_orders: [],
       debug_mode: true,
     }
   },
@@ -47,18 +50,6 @@ const store = createStore({
       state.user.bank_amount = bank_amount
       state.user.savings_amount = savings_amount
     },
-    SET_ORDERS (state, orders) {
-      state.orders = [...state.orders, ...orders];
-    },
-    SET_SELECTED_ORDERS (state, orders) {
-      state.selected_orders = orders;
-    },
-    UPDATE_ORDER_STATUS(state, orderUpdate) {
-      const order = state.orders.find(o => o.id === orderUpdate.orderId);
-      if (order) {
-          order.status = orderUpdate.status;
-      }
-    },
   },
   actions: {
     async logOut({ commit }){
@@ -82,33 +73,6 @@ const store = createStore({
         commit("SET_USER", user);
       } else {
         commit("SET_USER", null);
-      }
-    },
-    async fetchNewOrder({ commit }) {
-      try {
-        const { data } = await axios.get('order/get_order/')
-
-        console.log(data)
-
-        const newOrder = {
-          id: Math.floor(Math.random() * 1000000),
-          date_placed: new Date(),
-          status: 'pending',
-          items: data.items,
-          total: data.total_cost,
-          tip: data.tip,
-          refData: {
-            address_name: `${data.address} ${data.street}`,
-            town: `${data.town.replace('_', ' ')}`,
-            latitude: data.latitude,
-            longitude: data.longitude,
-          }
-        }
-
-        commit('SET_ORDERS', [newOrder])
-      } catch (error) {
-        console.error('Failed to fetch new order:', error)
-        throw error // or handle it differently if needed
       }
     },
     async set_savings({ commit }) {

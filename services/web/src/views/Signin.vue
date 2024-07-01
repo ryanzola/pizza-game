@@ -1,8 +1,8 @@
 <template>
-    <div class="min-h-screen min-w-full flex items-center justify-center">
+    <div class="min-h-[calc(100vh-88px)] min-w-full flex items-center justify-center">
       <div class="mx-auto max-w-md p-6 space-y-6">
         <div class="text-center space-y-2">
-          <h1 class="text-3xl font-bold text-white">Pizza Mango 🥭</h1>
+          <h1 class="text-3xl font-bold text-white">Pizza 🥭</h1>
           <p class="text-gray-500 dark:text-gray-400">Sign in with your Google account</p>
         </div>
         <div class="flex flex-col gap-4">

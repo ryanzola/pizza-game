@@ -5,7 +5,7 @@
     </router-link>
 
     <router-link to="/deliveries">
-      <MapPinIcon />
+      <Square3Stack3DIcon />
     </router-link>
 
     <router-link to="/bank">
@@ -26,7 +26,8 @@ import {
   CurrencyDollarIcon, 
   HomeIcon, 
   MapPinIcon,
-  InformationCircleIcon
+  InformationCircleIcon,
+  Square3Stack3DIcon,
 } from '@heroicons/vue/24/outline'
 import { mapState } from 'vuex'
 
@@ -35,7 +36,8 @@ export default {
     CurrencyDollarIcon,
     HomeIcon,
     MapPinIcon,
-    InformationCircleIcon
+    InformationCircleIcon,
+    Square3Stack3DIcon,
   },
   computed: {
     ...mapState(['user'])

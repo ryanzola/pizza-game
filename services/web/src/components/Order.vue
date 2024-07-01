@@ -11,11 +11,11 @@
         <!-- display lat and lon -->
         <p class="flex justify-between">
           <span>Latitude:</span> 
-          <span>{{ order.refData.latitude }}</span>
+          <span>{{ order.refData.latitude.toFixed(4) }}</span>
         </p>
         <p class="flex justify-between gap-2">
           <span>Longitude:</span> 
-          <span>{{ order.refData.longitude }}</span>
+          <span>{{ order.refData.longitude.toFixed(4) }}</span>
         </p>
       </div>
 
