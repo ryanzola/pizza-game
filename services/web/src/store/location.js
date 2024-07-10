@@ -10,8 +10,8 @@ const state = {
     longitude: -74.04757385194837,
   },
   bankCoords: {
-    latitude: 40.86083,
-    longitude: -74.079745,
+    latitude: 40.86082582150665,
+    longitude: -74.07959384969016,
   },
   player: {
     latitude: 0.0,
@@ -20,7 +20,7 @@ const state = {
   lastVisited: null,
   locationAvailable: false,
   watcher: null,
-  thresholdDistance: 100, // 50 meters as an example threshold
+  thresholdDistance: 100,
   intervalID: null,
 };
 
@@ -77,7 +77,7 @@ const actions = {
   startInterval({ commit, dispatch }) {
     const intervalID = setInterval(() => {
       dispatch('orders/checkAndUpdateOrderStatus', null, { root: true });
-    }, 1000);
+    }, 500);
     commit('setIntervalID', intervalID);
   },
   stopInterval({ state, commit }) {

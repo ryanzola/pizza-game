@@ -13,7 +13,6 @@
   <div class="flex-1">
     <DebugLocation />
     <div class="p-4">
-      <h1>Bank</h1>
       <p class="mb-4">Savings: ${{ savings_amount }}</p>
       <p class="mb-4">Current: ${{ bank_amount }}</p>
       <div class="progress-bar">
@@ -22,7 +21,8 @@
     </div>
   </div>
 
-  <button class="w-full bg-green-700 py-4" @click="deposit">Deposit</button>
+  <button v-if="debug_mode || isNearBank" class="w-full bg-green-700 py-4" @click="deposit">Deposit</button>
+  <p v-else class="w-full bg-gray-700 py-4 text-center">Head to the bank to deposit</p>
 </template>
 
 
@@ -30,7 +30,7 @@
 <script>
 import DebugLocation from "../components/DebugLocation.vue";
 import Order from "../components/Order.vue";
-import { mapGetters, mapState } from 'vuex'
+import { mapActions, mapGetters, mapState } from 'vuex'
 
 export default {
   name: 'Bank',
@@ -39,13 +39,24 @@ export default {
     Order
   },
   computed: {
+    ...mapState(['debug_mode']),
     ...mapGetters(['bank_amount', 'savings_amount']),
     ...mapGetters('location', ['isNearBank']),
     ...mapState(['version'])
   },
+  async mounted() {
+    console.log("mounted")
+    await this.fetchSavings()
+    await this.fetchBank()
+  },
   methods: {
+    ...mapActions(['update_savings', 'fetchSavings', 'fetchBank']),
     deposit() {
-      this.$store.dispatch('set_savings')
+      if(this.bank_amount > 0) {
+        this.update_savings()
+      } else {
+        console.warn('ya broke!')
+      }
     }
   }
 }

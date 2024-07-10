@@ -13,7 +13,7 @@
     </div>
 
     <div class="wait-time" v-if="!isNearRestaurantDepot">
-      Current Wait Time: {{ Math.floor(currentWaitTime / 1000 / 60) }} minutes
+      Current Wait Time: {{ Math.floor(waitTime / 1000 / 60) }} minutes
     </div>
   </div>
 
@@ -26,7 +26,7 @@
   </div>
 
   <ul :class="['orders', { 'transform opacity-50': !isNearPizzeria }]">
-    <Order v-for="order in orders" :key="order.id" :order="order" @change="toggleOrderSelection" />
+    <Order v-for="order in pendingOrders" :key="order.id" :order="order" @change="toggleOrderSelection" />
   </ul>
 
   <button v-if="isNearRestaurantDepot" class="order-btn" @click="() => {}">Restock Pizzeria</button>
@@ -63,28 +63,54 @@ export default {
     return {
       currentWaitTime: 0,
       selected: [],
-      loading: false,
+      loading: true,
     };
   },
   computed: {
     ...mapState(['version']),
+    ...mapState('orders', ['waitTime', 'selected_orders']),
     ...mapState('location', ['locationAvailable']),
     ...mapGetters('location', ['isNearPizzeria', 'isNearRestaurantDepot']),
     ...mapGetters('orders', ['orders']),
+    pendingOrders() {
+      // make sure order user_id is null and order.status is not delivered
+      return this.orders.filter(order => !order.user_id && order.status !== 'delivered');
+    }
+  },
+  async mounted() {
+    console.log(this.selected_orders)
+
+    try {
+      await this.fetchOrders();
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+    } finally {
+      this.loading = false;
+    }
   },
   methods: {
-    ...mapActions('orders', ['fetchNewOrder']),
-    toggleOrderSelection(order) {
-      const index = this.selected.findIndex(o => o.id === order.id);
+    ...mapActions('orders', ['fetchNewOrder', 'fetchOrders', 'attachUserToOrders']),
+    toggleOrderSelection(id) {
+      const index = this.selected.findIndex(selectedId => selectedId === id);
       if (index > -1) {
         this.selected.splice(index, 1);
       } else {
-        this.selected.push(order);
+        this.selected.push(id);
       }
     },
-    setDeliveries() {
-      this.$store.commit('SET_SELECTED_ORDERS', this.selected);
-      this.$router.push('/deliveries');
+    async setDeliveries() {
+      if (this.selected.length === 0) return;
+
+      try {
+        this.loading = true;
+        const response = await this.attachUserToOrders(this.selected);
+        console.log('User attached to orders successfully:', response);
+        this.$router.push('/deliveries');
+      } catch (error) {
+        console.error('Error attaching user to orders:', error);
+      } finally {
+        this.loading = false;
+      }
     },
     getNewOrder() {
       this.loading = true;

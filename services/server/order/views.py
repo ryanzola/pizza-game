@@ -3,12 +3,13 @@ import logging
 import requests
 import random
 import time
-import uuid
 
 from django.conf import settings
 from django.http import JsonResponse
+from rest_framework.response import Response
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.serializers import serialize
+from django.utils import timezone
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -16,6 +17,7 @@ from rest_framework.permissions import IsAuthenticated
 from openai import OpenAI
 
 from .models import Address, Order
+from .serializers import OrderSerializer
 
 GOOGLE_API_KEY = settings.GOOGLE_API_KEY
 OPENAI_API_KEY = settings.OPENAI_API_KEY
@@ -121,6 +123,16 @@ def get_random_order_from_openai(family_size):
         logger.error(f"Error fetching order from OpenAI: {e}")
         return None
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_orders(request):
+    # Retrieve all orders
+    all_orders = Order.objects.all()
+
+    # Serialize the orders with the nested address data
+    serialized_orders = OrderSerializer(all_orders, many=True).data
+
+    return Response({'orders': serialized_orders})
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -136,22 +148,25 @@ def construct_order(request):
         items = get_random_order_from_openai(family_size)
         total_cost, tip = estimated_order_cost(family_size)
 
-        date_placed = time.strftime('%Y-%m-%d %H:%M:%S')
+        order = Order(
+            status='queued',
+            date_delivered=None,
+            user=None,
+            address=address_obj,
+            items=items,
+            total_cost=total_cost,
+            tip=tip,
+            lat=lat,
+            lon=lon,
+        )
 
-        return JsonResponse({
-            # uuid4
-            'id': str(uuid.uuid4()),
-            'date_placed': date_placed,
-            'date_delivered': None,
-            'town': formatted_town_name,
-            'street': address_obj.street.name,
-            'address': address_obj.address,
-            'latitude': lat,
-            'longitude': lon,
-            'items': items,
-            'total_cost': total_cost,
-            'tip': tip
-        })
+        order.save()
+        print("Order created successfully.", order.id)
+
+        order_serializer = OrderSerializer(order)
+
+        return Response(order_serializer.data, status=200)
+    
     except ObjectDoesNotExist:
         logger.error("Address object does not exist.", exc_info=True)
         return JsonResponse({"error": "No data available"}, status=400)
@@ -159,6 +174,48 @@ def construct_order(request):
     except Exception as e:
         logger.error(f"Unexpected error in construct_order: {e}", exc_info=True)
         return JsonResponse({"error": str(e)}, status=500)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def attach_user_to_orders(request):
+    try:
+        user = request.user
+        order_ids = request.data.get('order_ids', [])
+
+        if not order_ids:
+            return Response({'error': 'No order IDs provided'}, status=400)
+
+        updated_orders = []
+        for order_id in order_ids:
+            try:
+                order = Order.objects.get(id=order_id)
+                order.user = user
+                order.status = 'en_route'
+                order.save()
+                updated_orders.append(order_id)
+            except ObjectDoesNotExist:
+                logger.error(f"Order with id {order_id} does not exist.")
+                continue
+
+        return Response({'message': 'User attached to orders successfully', 'updated_orders': updated_orders}, status=200)
+    except Exception as e:
+        logger.error(f"Unexpected error in attach_user_to_orders: {e}", exc_info=True)
+        return Response({"error": str(e)}, status=500)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_user_orders(request):
+    try:
+        user = request.user
+        user_orders = Order.objects.filter(user=user)
+
+        # Serialize the orders
+        serialized_orders = OrderSerializer(user_orders, many=True).data
+
+        return Response({'orders': serialized_orders}, status=200)
+    except Exception as e:
+        logger.error(f"Unexpected error in get_user_orders: {e}", exc_info=True)
+        return Response({"error": str(e)}, status=500)
 
 
 @api_view(['GET'])
@@ -173,3 +230,34 @@ def past_orders(request):
 
     return JsonResponse({'past_orders': data})
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def update_order_status(request, order_id):
+    try:
+        order = Order.objects.get(id=order_id)
+        new_status = request.data.get('status')
+
+        # Validate the new status
+        if new_status not in dict(Order.STATUS_CHOICES):
+            return JsonResponse({'error': 'Invalid status value'}, status=400)
+
+        # Attach the user if transitioning from 'queued' to 'en_route'
+        if order.status == 'queued' and new_status == 'en_route':
+            order.user = request.user
+
+        # if transitioning from 'en_route' to 'delivered', set the date_delivered
+        if order.status == 'en_route' and new_status == 'delivered':
+            order.date_delivered = timezone.now()
+
+            # add the tip to the user's bank_amount
+            request.user.profile.bank_amount += order.tip
+
+        order.status = new_status
+        order.save()
+
+        return JsonResponse({'message': 'Order status updated successfully'}, status=200)
+    except ObjectDoesNotExist:
+        return JsonResponse({'error': 'Order not found'}, status=404)
+    except Exception as e:
+        logger.error(f"Unexpected error in update_order_status: {e}", exc_info=True)
+        return JsonResponse({"error": str(e)}, status=500)

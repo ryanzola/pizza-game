@@ -1,5 +1,5 @@
 <template>
-  <div :class="['achievement-card', color]">
+  <li :class="['achievement-card', color]">
     <div class="h-16 w-16 min-w-[64px]">
       <img v-if="date" src="../assets/achievement-checked.svg" alt="" class="w-full h-full" />
       <img v-else="date" src="../assets/achievement-empty.svg" alt="" class="w-full h-full" />
@@ -11,9 +11,9 @@
       
       <p v-if="date" class="text-xs">{{ description }}</p>
 
-      <div v-if="date" class="text-indigo-500 text-sm">Unlocked on {{ date }}</div>
+      <div v-if="date" class="text-indigo-200 text-sm">Unlocked on {{ date }}</div>
     </div>
-  </div>
+  </li>
 </template>
 
 <script>
@@ -56,6 +56,6 @@ export default {
 
 <style scoped>
 .achievement-card {
-  @apply p-4 flex items-center gap-4 relative rounded text-gray-900;
+  @apply min-h-[128px] p-4 flex items-center gap-4 relative rounded bg-opacity-10 border border-white;
 }
 </style>

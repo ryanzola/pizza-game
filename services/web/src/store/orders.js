@@ -1,8 +1,13 @@
 import axios from 'axios';
 import { getDistanceFromLatLonInM } from './storeUtils';
 
+const baseWaitTime = 30 * 60 * 1000; // 30 minutes in milliseconds
+
 const state = {
   orders: [],
+  selected_orders: [],
+  waitTime: baseWaitTime,
+  isUpdating: false,
 }
 
 const mutations = {
@@ -21,57 +26,77 @@ const mutations = {
   SELECT_ORDER(state, orderId) {
     state.selected_orders.push(orderId);
   },
-  SET_ORDERS(state, orders) {
-    state.orders = orders;
+  SET_ORDERS(state, orders = []) {
+    state.orders = state.orders.concat(orders);
   },
   SET_SELECTED_ORDERS(state, orders) {
-    state.selected_orders = orders;
-  }
+    state.selected_orders = state.selected_orders.concat(orders);
+  },
+  UPDATE_ORDERS(state, updatedOrders) {
+    updatedOrders.forEach(orderId => {
+      const order = state.orders.find(order => order.id === orderId);
+
+      if (order) order.user = state.user;
+    });
+  },
 }
 
 const actions = {
-  checkAndUpdateOrderStatus({ state, getters, commit, rootState }) {
-    const baseWaitTime = 30 * 60 * 1000; // 30 minutes in milliseconds
+  checkAndUpdateOrderStatus({ state, commit, rootState }) {
+    // only orders with status of 'pending' or 'en_route' are checked
+    const filteredOrders = state.selected_orders.filter(order => ['pending', 'en_route'].includes(order.status));
     const multiplier = 1.1;
 
-    const additionalWaitTime = state.orders.length > 6 
-      ? baseWaitTime * (state.orders.length - 6) * multiplier 
+    const additionalWaitTime = filteredOrders.length > 6 
+      ? baseWaitTime * (filteredOrders.length - 6) * multiplier 
       : 0;
 
     const totalWaitTime = baseWaitTime + additionalWaitTime;
     const cancellationTime = totalWaitTime + baseWaitTime;
+    
+    state.waitTime = totalWaitTime;
 
     const playerLatitude = rootState.location.player.latitude;
     const playerLongitude = rootState.location.player.longitude;
 
-    state.orders.forEach(order => {
+
+    filteredOrders.forEach(async order => {
       let newStatus = null;
       const timeSinceOrderPlaced = Date.now() - new Date(order.date_placed).getTime();
 
-      if (order.refData.latitude && order.refData.longitude) {
+      if (order.refData?.latitude && order.refData?.longitude) {
         const distanceToOrder = getDistanceFromLatLonInM(
           playerLatitude,
           playerLongitude,
-          order.refData.latitude,
-          order.refData.longitude
+          order.refData?.latitude,
+          order.refData?.longitude
         );
 
-        if (distanceToOrder <= state.thresholdDistance) {
+        if (distanceToOrder <= rootState.location.thresholdDistance) {
           newStatus = 'delivered';
         }
       }
 
-      if (!newStatus && timeSinceOrderPlaced > cancellationTime) {
+      if (!newStatus && timeSinceOrderPlaced > cancellationTime) {        
         newStatus = 'cancelled';
-      } else if (timeSinceOrderPlaced > totalWaitTime) {
-        newStatus = 'ready';
       }
 
-      if (newStatus) {
-        commit('UPDATE_ORDER_STATUS', {
-          orderId: order.id,
-          status: newStatus
-        });
+      if (newStatus && !state.isUpdating) {
+        state.isUpdating = true;
+
+        try {
+          await axios.post(`order/update_order_status/${order.id}/`, {
+            status: newStatus
+          });
+
+          commit('UPDATE_ORDER_STATUS', { orderId: order.id, status: newStatus });
+        
+        } catch (error) {
+          console.error('Failed to update order status:', error);
+          throw error; // or handle it differently if needed
+        } finally {
+          state.isUpdating = false
+        }
       }
     });
   },
@@ -79,29 +104,50 @@ const actions = {
     try {
       const { data } = await axios.get('order/get_order/')
 
-      console.log(data)
-
-      const newOrder = {
-        id: data.id,
-        date_placed: data.date_placed,
-        status: 'pending',
-        items: data.items,
-        total: data.total_cost,
-        tip: data.tip,
-        refData: {
-          address_name: `${data.address} ${data.street}`,
-          town: `${data.town.replace('_', ' ')}`,
-          latitude: data.latitude,
-          longitude: data.longitude,
-        }
-      }
-
-      commit('SET_ORDERS', [newOrder])
+      commit('SET_ORDERS', [data])
     } catch (error) {
       console.error('Failed to fetch new order:', error)
+      throw error
+    }
+  },
+  async fetchOrders({ commit }) {
+    try {
+      const { data } = await axios.get('order/get_orders/')
+
+      // check for duplicate orders by id
+      const newOrders = data.orders.filter(o => !state.orders.some(so => so.id === o.id))
+
+      commit('SET_ORDERS', newOrders)
+    } catch (error) {
+      console.error('Failed to fetch orders:', error)
       throw error // or handle it differently if needed
     }
   },
+  async attachUserToOrders({ commit }, orderIds) {
+    try {
+      const response = await axios.post('order/attach_user_to_orders/', {
+        order_ids: orderIds
+      });
+      commit('UPDATE_ORDERS', response.data.updated_orders);
+      return response.data;
+    } catch (error) {
+      console.error('Error attaching user to orders:', error);
+      throw error;
+    }
+  },
+  async fetchSelectedOrders({ commit }) {
+    try {
+      const { data } = await axios.get('order/get_user_orders/')
+
+      // check for duplicate orders by id
+      const newOrders = data.orders.filter(o => !state.selected_orders.some(so => so.id === o.id))
+
+      commit('SET_SELECTED_ORDERS', newOrders)
+    } catch (error) {
+      console.error('Failed to fetch selected orders:', error)
+      throw error
+    }
+  }
 }
 
 const getters = {

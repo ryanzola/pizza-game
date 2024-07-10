@@ -1,22 +1,21 @@
 <template>
   <li>
     <input :id="`order-${order.id}`" type="checkbox" class="hidden" :disabled="isDisabled" v-model="isChecked" @change="onChange" />
-    <label :for="`order-${order.id}`">
-      <p class="address">{{ order.refData.address_name }}</p>
-      <p class="town">{{ order.refData.town || '' }}</p>
-      <p class="time">{{ formattedDate }}</p>
-      <p :class="['status', order.status]">{{ order.status }}</p>
+    <label :for="`order-${order.id}`" :class="debug_mode ? 'pt-0' : 'pt-2'">
+      <div v-if="debug_mode" class="bg-yellow-500 text-black p-2 flex gap-4">
+        <p>
+          <strong>Latitude:</strong> {{ order.latitude.toFixed(4) }}
+        </p>
+        <p>
+          <strong>Longitude:</strong> {{ order.longitude.toFixed(4) }}
+        </p>
+      </div>
 
-      <div v-if="$store.state.debug_mode">
-        <!-- display lat and lon -->
-        <p class="flex justify-between">
-          <span>Latitude:</span> 
-          <span>{{ order.refData.latitude.toFixed(4) }}</span>
-        </p>
-        <p class="flex justify-between gap-2">
-          <span>Longitude:</span> 
-          <span>{{ order.refData.longitude.toFixed(4) }}</span>
-        </p>
+      <div class="address-info px-2 grid grid-cols-2">
+        <p class="address">{{ order.address_name }}</p>
+        <p class="town">{{ order.town }}</p>
+        <p class="time">{{ formattedDate }}</p>
+        <p :class="['status', order.status]">{{ formattedStatus }}</p>
       </div>
 
       <vue-markdown 
@@ -30,6 +29,7 @@
 </template>
 
 <script>
+import { mapState } from 'vuex';
 import VueMarkdown from 'vue-markdown-render'
 
 export default {
@@ -37,6 +37,7 @@ export default {
   components: {
     VueMarkdown
   },
+  emits: ['change', 'input'],
   props: {
     order: {
       type: Object,
@@ -48,6 +49,7 @@ export default {
     }
   },
   computed: {
+    ...mapState(['debug_mode']),
     isChecked: {
       get() {
         return this.value;
@@ -70,14 +72,15 @@ export default {
       hours = hours ? hours : 12; // the hour '0' should be '12'
       
       return `${hours}:${minutes} ${ampm}`;
+    },
+    formattedStatus() {
+      // remove underscores and capitalize
+      return this.order.status?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     }
-  },
-  mounted() {
-    console.log(this.order)
   },
   methods: {
     onChange() {
-      this.$emit('change', this.order);
+      this.$emit('change', this.order.id);
     }
   }
 };
@@ -85,16 +88,12 @@ export default {
 
 <style lang="postcss" scoped>
 li label {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  grid-template-rows: repeat(3, auto);
   @apply 
     relative
+    flex flex-col gap-2
     border border-white 
     rounded
-    p-4
-    pr-3
-    overflow-hidden;;
+    overflow-hidden;
 }
 
 li input[type="checkbox"]:checked + label {
@@ -103,26 +102,26 @@ li input[type="checkbox"]:checked + label {
 
 .address {
   @apply 
-    font-bold;
+    font-bold col-start-1;
 }
 
 .town {
-  @apply 
-    mb-2
-    row-start-2 
+  @apply
+    row-start-2
     text-xs 
     capitalize;
 }
 
 .time {
   @apply 
-    col-start-2 row-start-1 
+    col-start-2 row-start-1
     text-xs text-right
     text-gray-500;
 }
 
 .items {
   @apply 
+    px-2 pb-2
     col-start-1 col-span-2
     text-xs
     text-gray-500;
@@ -141,16 +140,16 @@ li input[type="checkbox"]:checked + label {
     p-2;
 }
 
-.status.ready {
+.status.queued {
+  @apply bg-yellow-500;
+}
+
+.status.en_route {
   @apply bg-blue-500;
 }
 
 .status.delivered {
   @apply bg-green-500;
-}
-
-.status.pending {
-  @apply bg-yellow-500;
 }
 
 .status.cancelled {

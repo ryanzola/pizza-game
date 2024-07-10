@@ -16,7 +16,7 @@ const store = createStore({
     return {
       user: null,
       debug_mode: true,
-      version: '1.07.01.23.40'
+      version: '1.07.07.16.40'
     }
   },
   getters: {
@@ -47,10 +47,12 @@ const store = createStore({
       axios.defaults.headers.common['Authorization'] = `Token ${token}`;
       state.user_token = token
     },
-    SET_BANK (state, { bank_amount, savings_amount }) {
+    SET_BANK (state, bank_amount) {
       state.user.bank_amount = bank_amount
-      state.user.savings_amount = savings_amount
     },
+    SET_SAVINGS(state, savings_amount) {
+      state.user.savings_amount = savings_amount
+    }
   },
   actions: {
     async logOut({ commit }){
@@ -76,16 +78,49 @@ const store = createStore({
         commit("SET_USER", null);
       }
     },
-    async set_savings({ commit }) {
+    async fetchSavings({ commit}) {
       try {
-        const { data } = await axios.post('/auth/set_savings/')
+        const { data } = await axios.get('/auth/get_savings/')
 
-        commit('SET_BANK', data)
+        commit('SET_SAVINGS', data)
+      } catch (error) {
+        console.error('Failed to fetch savings:', error)
+        throw error
+      }
+    },
+    async update_savings({ commit }) {
+      try {
+        const { data } = await axios.post('/auth/update_savings/')
+
+        commit('SET_SAVINGS', data)
+        commit('SET_BANK', 0)
       } catch (error) {
         console.error('Failed to deposit:', error)
         throw error // or handle it differently if needed
       }
     },
+    async fetchBank({ commit }) {
+      try {
+        const { data } = await axios.get('/auth/get_bank/')
+
+        commit('SET_BANK', data)
+      } catch (error) {
+        console.error('Failed to fetch bank:', error)
+        throw error
+      }
+    },
+    async update_bank({ commit }, tip) {
+      try {
+        const { data } = await axios.post('/auth/update_bank/', {
+          amount: tip
+        }) 
+
+        commit('SET_BANK', data)
+      } catch (error) {
+        console.error('Failed to withdraw:', error)
+        throw error // or handle it differently if needed
+      }
+    }
   },
   plugins: [createPersistedState({
     paths: ['user', 'debug_mode'] // Specify only the state you want to persist

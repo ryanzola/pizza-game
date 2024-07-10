@@ -26,17 +26,17 @@ class Address(models.Model):
 # or time expiration and customer cancellation. order will be created with user being null
 class Order(models.Model):
     STATUS_CHOICES = [
-        ('queued', 'Queued'),
-        ('ready', 'Ready'),
-        ('delivered', 'Delivered'),
-        ('cancelled', 'Cancelled'),
+        ('queued', 'Queued'),           # order is at the pizzeria waiting to be delivered
+        ('en_route', 'En Route'),       # order is on its way to the customer
+        ('delivered', 'Delivered'),     # order has been delivered to the customer
+        ('cancelled', 'Cancelled'),     # order has been cancelled by the customer (after 30 minutes of no activity))
     ]
 
     id = models.AutoField(primary_key=True)
-    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_orders')
-    time = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='queued')
-    time_to_complete = models.DateTimeField(null=True)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_orders')
+    date_placed = models.DateTimeField(auto_now_add=True)
+    date_delivered = models.DateTimeField(null=True)
     address = models.ForeignKey(Address, on_delete=models.SET_NULL, null=True, blank=True)
     items = models.CharField(max_length=1024)
     total_cost = models.DecimalField(max_digits=6, decimal_places=2)

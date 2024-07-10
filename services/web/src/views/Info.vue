@@ -31,7 +31,7 @@
     <div class="flex items-center justify-between">
       <div>
         <h2 class="text-2xl font-bold text-white">Developer Mode</h2>
-        <p class="text-white text-sm">Test features without geolocation.</p>
+        <p class="text-white text-sm">Test features from the couch.</p>
       </div>
       <div class="relative pr-4">
         <label for="debug" class="cursor-pointer">
@@ -124,7 +124,6 @@ export default {
     },
     toggleDebugMode() {
       this.$store.commit('TOGGLE_DEBUG_MODE');
-      console.log('Debug Mode:', this.$store.state.debug_mode);
     }
   }
 }

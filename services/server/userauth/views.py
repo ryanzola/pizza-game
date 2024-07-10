@@ -5,8 +5,9 @@ from django.conf import settings
 from django.contrib.auth.models import User
 
 from rest_framework.authtoken.models import Token
-from rest_framework.decorators import api_view
 from rest_framework.response import Response
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
@@ -64,27 +65,34 @@ def google_login(request):
         return Response({'error': f'Google login error: {str(e)}'}, status=400)
 
 @api_view(['GET'])
-def get_bank_amount(request):
-    user_id = request.data.get('user_id')
-    user = User.objects.filter(id=user_id).first()
+@permission_classes([IsAuthenticated])
+def get_bank(request):
+    user = request.user
     profile = Profile.objects.filter(user=user).first()
 
-    return Response({'bank_amount': profile.bank_amount}, status=200)
+    return Response(profile.bank_amount, status=200)
 
 @api_view(['POST'])
-def update_bank_amount(user_id, amount):
-    user = User.objects.filter(id=user_id).first()
+@permission_classes([IsAuthenticated])
+def update_bank(request, amount):
+    user = request.user
     profile = Profile.objects.filter(user=user).first()
-    profile.bank_amount = amount
+    profile.bank_amount += amount
     profile.save()
 
-    return profile.bank_amount
+    return Response(profile.bank_amount, status=200)
 
-# set_savings is called when the user clicks the "Set Savings" button
-# set_savings will take the current bank_amount and add it to the savings_amount
-# set_savings will also set the bank_amount to 0
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_savings(request):
+    user = request.user
+    profile = Profile.objects.filter(user=user).first()
+
+    return Response(profile.savings_amount, status=200)
+
 @api_view(['POST'])
-def set_savings(request):
+@permission_classes([IsAuthenticated])
+def update_savings(request):
     user = request.user
     profile = Profile.objects.filter(user=user).first()
 
@@ -94,7 +102,7 @@ def set_savings(request):
         profile.bank_amount = 0
         profile.save()
 
-        return Response({ 'savings_amount': profile.savings_amount, 'bank_amount': profile.bank_amount }, status=200)
+        return Response(profile.savings_amount, status=200)
     else:
         # Handle the case where the profile doesn't exist
         return Response({"error": "Profile not found"}, status=404)
