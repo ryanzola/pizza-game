@@ -38,7 +38,7 @@ class Order(models.Model):
     date_placed = models.DateTimeField(auto_now_add=True)
     date_delivered = models.DateTimeField(null=True)
     address = models.ForeignKey(Address, on_delete=models.SET_NULL, null=True, blank=True)
-    items = models.CharField(max_length=1024)
+    items = models.TextField(default='[]')
     total_cost = models.DecimalField(max_digits=6, decimal_places=2)
     tip = models.DecimalField(max_digits=6, decimal_places=2)
     lat = models.FloatField(default=0)

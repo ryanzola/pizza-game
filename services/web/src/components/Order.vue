@@ -19,11 +19,19 @@
       </div>
 
       <vue-markdown 
+        v-if="typeof order.items === 'string'"
         :source="order.items"
         oprions="{ html: true }"
         class="items"
       >
       </vue-markdown>
+
+      <ul v-else class="items">
+        <li v-for="item, index in order.order_items" :key="index">
+          <p>{{ item }}</p>
+        </li>
+      </ul>
+
     </label>
   </li>
 </template>

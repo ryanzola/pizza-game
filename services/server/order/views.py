@@ -31,14 +31,41 @@ client = OpenAI(
 assistant = client.beta.assistants.create(
     name="Pizzeria Order Assistant",
     instructions="""
-    You work at a pizzeria. When provided with the number of people, list a unique and concise order without explanations or additional details. 
+    You work at a pizzeria, taking phone orders for delivery. 
+    When provided with the number of people, list a unique and concise order without explanations or additional details. 
     Orders can be of any combination of appetizers, pizza, pasta, salad, drinks, and desserts. 
     Orders should be specific food items from these categories. 
-    Include a quantity for each item in the order. 
-    Format the response as a markdown list.
+    Include a quantity for each item in the order.
+    Example order item: 1 large pepperoni pizza
     """,
     tools=[],
-    model="gpt-4-turbo"
+    model="gpt-4o-2024-08-06",
+    response_format={
+        "type": "json_schema",
+        "json_schema": {
+            "name": "pizza_order",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "order_items": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "total_cost": {
+                        "type": "number"
+                    },
+                    "tip": {
+                        "type": "number"
+                    },
+                },
+                "required": ["order_items", "total_cost", "tip"],
+                "additionalProperties": False
+            },
+        }
+    }
 )
 
 thread = client.beta.threads.create()
@@ -86,7 +113,7 @@ def get_random_order_from_openai(family_size):
     message = client.beta.threads.messages.create(
         thread_id=thread.id,
         role="user",
-        content=f"Please create an order for a family of {family_size} people."
+        content=f"Please create an order for a family of {family_size} people.",
     )
 
     try:
@@ -145,7 +172,7 @@ def construct_order(request):
         lat, lon = get_lat_lon(formatted_address, formatted_town_name)
 
         family_size = random.randint(1, 6)
-        items = get_random_order_from_openai(family_size)
+        new_order = get_random_order_from_openai(family_size)
         total_cost, tip = estimated_order_cost(family_size)
 
         order = Order(
@@ -153,7 +180,7 @@ def construct_order(request):
             date_delivered=None,
             user=None,
             address=address_obj,
-            items=items,
+            items=new_order.order_items,
             total_cost=total_cost,
             tip=tip,
             lat=lat,

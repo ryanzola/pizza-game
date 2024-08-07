@@ -33,3 +33,9 @@ Thumbs.db
 # Environtment Variables #
 ##########################
 .env
+
+.vscode
+
+# SSL #
+#######
+*.crt
