@@ -18,12 +18,12 @@
         <p :class="['status', order.status]">{{ formattedStatus }}</p>
       </div>
 
-      <vue-markdown 
-        :source="order.items"
-        oprions="{ html: true }"
-        class="items"
-      >
-      </vue-markdown>
+      <ul class="items">
+        <li v-for="item, index in order.items" :key="index">
+          <p>{{ item }}</p>
+        </li>
+      </ul>
+
     </label>
   </li>
 </template>
@@ -82,7 +82,7 @@ export default {
     onChange() {
       this.$emit('change', this.order.id);
     }
-  }
+  },
 };
 </script>
 

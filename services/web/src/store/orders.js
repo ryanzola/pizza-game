@@ -104,6 +104,8 @@ const actions = {
     try {
       const { data } = await axios.get('order/get_order/')
 
+      console.log('New order:', data)
+
       commit('SET_ORDERS', [data])
     } catch (error) {
       console.error('Failed to fetch new order:', error)

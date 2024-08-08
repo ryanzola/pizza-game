@@ -31,14 +31,41 @@ client = OpenAI(
 assistant = client.beta.assistants.create(
     name="Pizzeria Order Assistant",
     instructions="""
-    You work at a pizzeria. When provided with the number of people, list a unique and concise order without explanations or additional details. 
+    You work at a pizzeria, taking phone orders for delivery. 
+    When provided with the number of people, list a unique and concise order without explanations or additional details. 
     Orders can be of any combination of appetizers, pizza, pasta, salad, drinks, and desserts. 
     Orders should be specific food items from these categories. 
-    Include a quantity for each item in the order. 
-    Format the response as a markdown list.
+    Include a quantity for each item in the order.
+    Example order item: 1 large pepperoni pizza
     """,
     tools=[],
-    model="gpt-4-turbo"
+    model="gpt-4o-2024-08-06",
+    response_format={
+        "type": "json_schema",
+        "json_schema": {
+            "name": "pizza_order",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "order_items": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "total_cost": {
+                        "type": "number"
+                    },
+                    "tip": {
+                        "type": "number"
+                    },
+                },
+                "required": ["order_items", "total_cost", "tip"],
+                "additionalProperties": False
+            },
+        }
+    }
 )
 
 thread = client.beta.threads.create()
@@ -86,7 +113,7 @@ def get_random_order_from_openai(family_size):
     message = client.beta.threads.messages.create(
         thread_id=thread.id,
         role="user",
-        content=f"Please create an order for a family of {family_size} people."
+        content=f"Please create an order for a family of {family_size} people.",
     )
 
     try:
@@ -117,7 +144,7 @@ def get_random_order_from_openai(family_size):
         assistant_messages = [msg.content[0].text.value for msg in messages.data if msg.role == 'assistant']
         latest_response = assistant_messages[0] if assistant_messages else None
 
-        return latest_response
+        return json.loads(latest_response)
 
     except Exception as e:
         logger.error(f"Error fetching order from OpenAI: {e}")
@@ -145,20 +172,25 @@ def construct_order(request):
         lat, lon = get_lat_lon(formatted_address, formatted_town_name)
 
         family_size = random.randint(1, 6)
-        items = get_random_order_from_openai(family_size)
+        new_order = get_random_order_from_openai(family_size)
+        if not new_order:
+            return JsonResponse({"error": "Failed to get a valid order from OpenAI"}, status=500)
+
         total_cost, tip = estimated_order_cost(family_size)
+
+        print("New order:", new_order)
 
         order = Order(
             status='queued',
             date_delivered=None,
             user=None,
             address=address_obj,
-            items=items,
             total_cost=total_cost,
             tip=tip,
             lat=lat,
             lon=lon,
         )
+        order.set_items(new_order['order_items'])  # Use the set_items method
 
         order.save()
         print("Order created successfully.", order.id)

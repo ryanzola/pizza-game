@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+import json
 
 class Town(models.Model):
     name = models.CharField(max_length=200)
@@ -38,8 +39,17 @@ class Order(models.Model):
     date_placed = models.DateTimeField(auto_now_add=True)
     date_delivered = models.DateTimeField(null=True)
     address = models.ForeignKey(Address, on_delete=models.SET_NULL, null=True, blank=True)
-    items = models.CharField(max_length=1024)
+    items = models.TextField(default='[]')  # Store items as JSON string
     total_cost = models.DecimalField(max_digits=6, decimal_places=2)
     tip = models.DecimalField(max_digits=6, decimal_places=2)
     lat = models.FloatField(default=0)
     lon = models.FloatField(default=0)
+
+    def set_items(self, items):
+        if isinstance(items, list):
+            self.items = json.dumps(items)
+        else:
+            raise ValueError("Items must be a list of strings")
+
+    def get_items(self):
+        return json.loads(self.items)
