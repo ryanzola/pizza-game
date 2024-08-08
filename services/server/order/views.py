@@ -144,7 +144,7 @@ def get_random_order_from_openai(family_size):
         assistant_messages = [msg.content[0].text.value for msg in messages.data if msg.role == 'assistant']
         latest_response = assistant_messages[0] if assistant_messages else None
 
-        return latest_response
+        return json.loads(latest_response)
 
     except Exception as e:
         logger.error(f"Error fetching order from OpenAI: {e}")
@@ -173,19 +173,24 @@ def construct_order(request):
 
         family_size = random.randint(1, 6)
         new_order = get_random_order_from_openai(family_size)
+        if not new_order:
+            return JsonResponse({"error": "Failed to get a valid order from OpenAI"}, status=500)
+
         total_cost, tip = estimated_order_cost(family_size)
+
+        print("New order:", new_order)
 
         order = Order(
             status='queued',
             date_delivered=None,
             user=None,
             address=address_obj,
-            items=new_order.order_items,
             total_cost=total_cost,
             tip=tip,
             lat=lat,
             lon=lon,
         )
+        order.set_items(new_order['order_items'])  # Use the set_items method
 
         order.save()
         print("Order created successfully.", order.id)
