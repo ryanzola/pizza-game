@@ -112,9 +112,11 @@ const actions = {
       throw error
     }
   },
-  async fetchOrders({ commit }) {
+  async fetchOrders({ commit, state }, { since } = {}) {
     try {
-      const { data } = await axios.get('order/get_orders/')
+      const params = {}
+      if (since) params.since = since
+      const { data } = await axios.get('order/get_orders/', { params })
 
       // check for duplicate orders by id
       const newOrders = data.orders.filter(o => !state.orders.some(so => so.id === o.id))

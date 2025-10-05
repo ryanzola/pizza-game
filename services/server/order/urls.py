@@ -8,4 +8,6 @@ urlpatterns = [
     path('attach_user_to_orders/', views.attach_user_to_orders, name='attach_user_to_orders'),
     path('update_order_status/<str:order_id>/', views.update_order_status, name='update_order_status'),
     path('past_orders/', views.past_orders, name='past_orders'),
+    path('start_session/', views.start_session, name='start_session'),
+    path('end_session/', views.end_session, name='end_session'),
 ]

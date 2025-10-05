@@ -29,6 +29,12 @@
     <Order v-for="order in pendingOrders" :key="order.id" :order="order" @change="toggleOrderSelection" />
   </ul>
 
+  <div class="flex gap-2">
+    <button v-if="!hasActiveSession" class="order-btn bg-green-600 hover:bg-green-700 flex-1" @click="start_session">Start Session</button>
+    <button v-else class="order-btn bg-red-600 hover:bg-red-700 flex-1" @click="end_session">End Session</button>
+  </div>
+
+
   <button v-if="isNearRestaurantDepot" class="order-btn" @click="() => {}">Restock Pizzeria</button>
   <button v-else-if="selected.length === 0 && $store.state.debug_mode" class="order-btn" @click="getNewOrder">Get New Order</button>
   <button v-else-if="selected.length > 0" class="order-btn" @click="setDeliveries">
@@ -64,10 +70,11 @@ export default {
       currentWaitTime: 0,
       selected: [],
       loading: true,
+      pollId: null,
     };
   },
   computed: {
-    ...mapState(['version']),
+    ...mapState(['session', 'version']),
     ...mapState('orders', ['waitTime', 'selected_orders']),
     ...mapState('location', ['locationAvailable']),
     ...mapGetters('location', ['isNearPizzeria', 'isNearRestaurantDepot']),
@@ -75,19 +82,43 @@ export default {
     pendingOrders() {
       // make sure order user_id is null and order.status is not delivered
       return this.orders.filter(order => !order.user_id && order.status !== 'delivered');
+    },
+    hasActiveSession() {
+      const session = this.session || {};
+      return session.status === 'active' && !session.ended_at;
     }
   },
   async mounted() {
     try {
       await this.fetchOrders();
+      // Poll every 15 seconds for new orders after the latest known timestamp
+      this.pollId = setInterval(() => {
+        const latest = this.latestOrderTimestampISO();
+        this.fetchOrders({ since: latest }).catch(() => {});
+      }, 15000);
     } catch (error) {
       console.error('Error fetching orders:', error);
     } finally {
       this.loading = false;
     }
   },
+  unmounted() {
+    if (this.pollId) {
+      clearInterval(this.pollId);
+      this.pollId = null;
+    }
+  },
   methods: {
     ...mapActions('orders', ['fetchNewOrder', 'fetchOrders', 'attachUserToOrders']),
+    ...mapActions(['start_session', 'end_session']),
+    latestOrderTimestampISO() {
+      if (!this.orders || this.orders.length === 0) return undefined;
+      const latestMs = this.orders.reduce((max, o) => {
+        const t = new Date(o.date_placed).getTime();
+        return Number.isFinite(t) && t > max ? t : max;
+      }, 0);
+      return latestMs ? new Date(latestMs).toISOString() : undefined;
+    },
     toggleOrderSelection(id) {
       const index = this.selected.findIndex(selectedId => selectedId === id);
       if (index > -1) {

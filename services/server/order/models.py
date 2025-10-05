@@ -53,3 +53,26 @@ class Order(models.Model):
 
     def get_items(self):
         return json.loads(self.items)
+
+
+class GameSession(models.Model):
+    STATUS_CHOICES = [
+        ("active", "Active"),
+        ("ended", "Ended"),
+        ("timeout", "Timeout"),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="game_sessions")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active")
+    started_at = models.DateTimeField(auto_now_add=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+    # Tracks last time the user accepted new orders (attach from queued -> en_route)
+    last_activity = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["user", "status"]),
+        ]
+
+    def __str__(self):
+        return f"Session {self.id} for {self.user.username} ({self.status})"
