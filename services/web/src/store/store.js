@@ -16,6 +16,12 @@ const store = createStore({
     return {
       user: null,
       debug_mode: true,
+      session: {
+        session_id: null,
+        status: null,
+        started_at: null,
+        ended_at: null
+      },
       version: '1.07.07.16.40'
     }
   },
@@ -52,6 +58,14 @@ const store = createStore({
     },
     SET_SAVINGS(state, savings_amount) {
       state.user.savings_amount = savings_amount
+    },
+    SET_SESSION(state, sessionData = {}) {
+      state.session = {
+        session_id: sessionData.session_id ?? null,
+        status: sessionData.status ?? null,
+        started_at: sessionData.started_at ?? null,
+        ended_at: sessionData.ended_at ?? null,
+      }
     }
   },
   actions: {
@@ -120,10 +134,31 @@ const store = createStore({
         console.error('Failed to withdraw:', error)
         throw error // or handle it differently if needed
       }
+    },
+    async start_session({ commit }, sessionData) {
+      try {
+        const { data } = await axios.post('/order/start_session/', sessionData)
+
+        commit('SET_SESSION', data)
+      } catch (error) {
+        console.error('Failed to start session:', error)
+        throw error
+      }
+    },
+    async end_session({ commit }) {
+      try {
+        const { data } = await axios.post('/order/end_session/')
+
+        // update current sessions status and ended_at using the values from the response
+        commit('SET_SESSION', data)
+      } catch (error) {
+        console.error('Failed to end session:', error)
+        throw error
+      }
     }
   },
   plugins: [createPersistedState({
-    paths: ['user', 'debug_mode'] // Specify only the state you want to persist
+    paths: ['user', 'debug_mode', 'session'] // Specify only the state you want to persist
   })],
 })
 

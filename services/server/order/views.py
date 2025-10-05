@@ -3,6 +3,7 @@ import logging
 import requests
 import random
 import time
+import threading
 
 from django.conf import settings
 from django.http import JsonResponse
@@ -16,8 +17,9 @@ from rest_framework.permissions import IsAuthenticated
 
 from openai import OpenAI
 
-from .models import Address, Order
+from .models import Address, Order, GameSession
 from .serializers import OrderSerializer
+from django.utils.dateparse import parse_datetime
 
 GOOGLE_API_KEY = settings.GOOGLE_API_KEY
 OPENAI_API_KEY = settings.OPENAI_API_KEY
@@ -69,6 +71,11 @@ assistant = client.beta.assistants.create(
 )
 
 thread = client.beta.threads.create()
+
+# Keep track of spawner threads per active session
+_SESSION_THREADS = {}
+
+SESSION_INACTIVITY_MINUTES = 30
 
 def get_lat_lon(address, city, state="NJ"):  
     # Format the address
@@ -150,50 +157,95 @@ def get_random_order_from_openai(family_size):
         logger.error(f"Error fetching order from OpenAI: {e}")
         return None
 
+
+def spawn_random_order():
+    """Create and persist a random order using the existing helpers."""
+    address_obj = Address.objects.select_related('street__town').order_by('?').first()
+    if not address_obj:
+        return None
+
+    formatted_town_name = address_obj.street.town.name.replace('_', ' ')
+    formatted_address = f"{address_obj.address} {address_obj.street.name}"
+    lat, lon = get_lat_lon(formatted_address, formatted_town_name)
+
+    family_size = random.randint(1, 6)
+    new_order = get_random_order_from_openai(family_size)
+    if not new_order:
+        return None
+
+    total_cost, tip = estimated_order_cost(family_size)
+
+    order = Order(
+        status='queued',
+        date_delivered=None,
+        user=None,
+        address=address_obj,
+        total_cost=total_cost,
+        tip=tip,
+        lat=lat or 0,
+        lon=lon or 0,
+    )
+    order.set_items(new_order['order_items'])
+    order.save()
+    return order
+
+
+def _spawner_loop(session_id):
+    """Background loop to spawn orders while a session remains active."""
+    try:
+        while True:
+            try:
+                session = GameSession.objects.get(id=session_id)
+            except GameSession.DoesNotExist:
+                break
+
+            if session.status != 'active':
+                break
+
+            # Check inactivity timeout
+            if session.last_activity and (timezone.now() - session.last_activity).total_seconds() > SESSION_INACTIVITY_MINUTES * 60:
+                session.status = 'timeout'
+                session.ended_at = timezone.now()
+                session.save(update_fields=["status", "ended_at"])
+                break
+
+            # Spawn at random intervals
+            delay = random.randint(20, 60)  # seconds
+            time.sleep(delay)
+
+            # Spawn a new order
+            try:
+                spawn_random_order()
+            except Exception as e:
+                logger.error(f"Order spawn error for session {session_id}: {e}")
+                # keep loop running despite single failure
+
+    finally:
+        # Clean up thread reference
+        _SESSION_THREADS.pop(session_id, None)
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_orders(request):
-    # Retrieve all orders
-    all_orders = Order.objects.all()
+    # Optional delta filter via ?since=<ISO8601>
+    since_str = request.GET.get('since')
+    qs = Order.objects.all()
+    if since_str:
+        dt = parse_datetime(since_str)
+        if dt:
+            qs = qs.filter(date_placed__gt=dt)
 
-    # Serialize the orders with the nested address data
-    serialized_orders = OrderSerializer(all_orders, many=True).data
-
+    qs = qs.order_by('date_placed')
+    serialized_orders = OrderSerializer(qs, many=True).data
     return Response({'orders': serialized_orders})
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def construct_order(request):
     try:
-        address_obj = Address.objects.select_related('street__town').order_by('?').first()
-
-        formatted_town_name = address_obj.street.town.name.replace('_', ' ')
-        formatted_address = f"{address_obj.address} {address_obj.street.name}"
-        lat, lon = get_lat_lon(formatted_address, formatted_town_name)
-
-        family_size = random.randint(1, 6)
-        new_order = get_random_order_from_openai(family_size)
-        if not new_order:
-            return JsonResponse({"error": "Failed to get a valid order from OpenAI"}, status=500)
-
-        total_cost, tip = estimated_order_cost(family_size)
-
-        print("New order:", new_order)
-
-        order = Order(
-            status='queued',
-            date_delivered=None,
-            user=None,
-            address=address_obj,
-            total_cost=total_cost,
-            tip=tip,
-            lat=lat,
-            lon=lon,
-        )
-        order.set_items(new_order['order_items'])  # Use the set_items method
-
-        order.save()
-        print("Order created successfully.", order.id)
+        order = spawn_random_order()
+        if not order:
+            return JsonResponse({"error": "Failed to create order"}, status=500)
 
         order_serializer = OrderSerializer(order)
 
@@ -217,6 +269,11 @@ def attach_user_to_orders(request):
         if not order_ids:
             return Response({'error': 'No order IDs provided'}, status=400)
 
+        # Must have an active session to accept new orders
+        active_session = GameSession.objects.filter(user=user, status='active').order_by('-started_at').first()
+        if not active_session:
+            return Response({'error': 'No active session. Start a session to accept orders.'}, status=403)
+
         updated_orders = []
         for order_id in order_ids:
             try:
@@ -228,6 +285,11 @@ def attach_user_to_orders(request):
             except ObjectDoesNotExist:
                 logger.error(f"Order with id {order_id} does not exist.")
                 continue
+
+        # Update session last activity when orders are accepted
+        if updated_orders:
+            active_session.last_activity = timezone.now()
+            active_session.save(update_fields=["last_activity"])
 
         return Response({'message': 'User attached to orders successfully', 'updated_orders': updated_orders}, status=200)
     except Exception as e:
@@ -276,6 +338,11 @@ def update_order_status(request, order_id):
         # Attach the user if transitioning from 'queued' to 'en_route'
         if order.status == 'queued' and new_status == 'en_route':
             order.user = request.user
+            # Bump last activity if there is an active session
+            active_session = GameSession.objects.filter(user=request.user, status='active').order_by('-started_at').first()
+            if active_session:
+                active_session.last_activity = timezone.now()
+                active_session.save(update_fields=["last_activity"])
 
         # if transitioning from 'en_route' to 'delivered', set the date_delivered
         if order.status == 'en_route' and new_status == 'delivered':
@@ -293,3 +360,56 @@ def update_order_status(request, order_id):
     except Exception as e:
         logger.error(f"Unexpected error in update_order_status: {e}", exc_info=True)
         return JsonResponse({"error": str(e)}, status=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def start_session(request):
+    try:
+        user = request.user
+
+        # End any previously active sessions for this user
+        GameSession.objects.filter(user=user, status='active').update(status='ended', ended_at=timezone.now())
+
+        session = GameSession.objects.create(user=user)
+
+        # Start background spawner loop for this session
+        t = threading.Thread(target=_spawner_loop, args=(session.id,), daemon=True)
+        t.start()
+        _SESSION_THREADS[session.id] = t
+
+        return Response({
+            'session_id': session.id,
+            'status': session.status,
+            'started_at': session.started_at,
+            'ended_at': None,
+            'note': 'Orders will begin spawning shortly.'
+        }, status=200)
+    except Exception as e:
+        logger.error(f"Unexpected error in start_session: {e}", exc_info=True)
+        return Response({"error": str(e)}, status=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def end_session(request):
+    try:
+        user = request.user
+        session = GameSession.objects.filter(user=user, status='active').order_by('-started_at').first()
+        if not session:
+            return Response({'message': 'No active session'}, status=200)
+
+        session.status = 'ended'
+        session.ended_at = timezone.now()
+        session.save(update_fields=["status", "ended_at"])
+
+        return Response({
+            'session_id': session.id,
+            'status': session.status,
+            'started_at': session.started_at,
+            'ended_at': session.ended_at,
+            'note': 'Remaining accepted orders must still be completed.'
+        }, status=200)
+    except Exception as e:
+        logger.error(f"Unexpected error in end_session: {e}", exc_info=True)
+        return Response({"error": str(e)}, status=500)
