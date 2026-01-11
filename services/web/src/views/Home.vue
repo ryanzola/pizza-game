@@ -36,7 +36,10 @@
 
 
   <button v-if="isNearRestaurantDepot" class="order-btn" @click="() => {}">Restock Pizzeria</button>
-  <button v-else-if="selected.length === 0 && $store.state.debug_mode" class="order-btn" @click="getNewOrder">Get New Order</button>
+  <div v-else-if="selected.length === 0 && $store.state.debug_mode" class="flex border-t border-gray-500">
+    <button class="order-btn" @click="getNewOrder">Get New Order</button>
+    <button class="order-btn" @click="clearQueuedOrders">Clear Orders</button>
+  </div>
   <button v-else-if="selected.length > 0" class="order-btn" @click="setDeliveries">
     Take Deliveries
     <ChevronDoubleRightIcon class="absolute right-4 top-1/2 transform translate-y-[-50%] w-6 h-6" />
@@ -109,7 +112,7 @@ export default {
     }
   },
   methods: {
-    ...mapActions('orders', ['fetchNewOrder', 'fetchOrders', 'attachUserToOrders']),
+    ...mapActions('orders', ['fetchNewOrder', 'fetchOrders', 'attachUserToOrders', 'clearQueuedOrders']),
     ...mapActions(['start_session', 'end_session']),
     latestOrderTimestampISO() {
       if (!this.orders || this.orders.length === 0) return undefined;

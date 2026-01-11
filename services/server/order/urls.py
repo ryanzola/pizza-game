@@ -10,4 +10,5 @@ urlpatterns = [
     path('past_orders/', views.past_orders, name='past_orders'),
     path('start_session/', views.start_session, name='start_session'),
     path('end_session/', views.end_session, name='end_session'),
+    path('clear_queued_orders/', views.clear_queued_orders, name='clear_queued_orders'),
 ]
