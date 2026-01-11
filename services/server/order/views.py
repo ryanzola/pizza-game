@@ -413,3 +413,21 @@ def end_session(request):
     except Exception as e:
         logger.error(f"Unexpected error in end_session: {e}", exc_info=True)
         return Response({"error": str(e)}, status=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def clear_queued_orders(request):
+    try:
+        # Check if DEBUG is True
+        if not settings.DEBUG:
+            return JsonResponse({'error': 'This endpoint is only available in developer mode.'}, status=403)
+
+        # Delete all orders with status 'queued'
+        deleted_count, _ = Order.objects.filter(status='queued').delete()
+
+        return JsonResponse({'message': f'Successfully cleared {deleted_count} queued orders.'}, status=200)
+
+    except Exception as e:
+        logger.error(f"Unexpected error in clear_queued_orders: {e}", exc_info=True)
+        return JsonResponse({"error": str(e)}, status=500)

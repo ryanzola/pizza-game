@@ -39,6 +39,9 @@ const mutations = {
       if (order) order.user = state.user;
     });
   },
+  REMOVE_QUEUED_ORDERS(state) {
+    state.orders = state.orders.filter(order => order.status !== 'queued');
+  },
 }
 
 const actions = {
@@ -47,13 +50,13 @@ const actions = {
     const filteredOrders = state.selected_orders.filter(order => ['pending', 'en_route'].includes(order.status));
     const multiplier = 1.1;
 
-    const additionalWaitTime = filteredOrders.length > 6 
-      ? baseWaitTime * (filteredOrders.length - 6) * multiplier 
+    const additionalWaitTime = filteredOrders.length > 6
+      ? baseWaitTime * (filteredOrders.length - 6) * multiplier
       : 0;
 
     const totalWaitTime = baseWaitTime + additionalWaitTime;
     const cancellationTime = totalWaitTime + baseWaitTime;
-    
+
     state.waitTime = totalWaitTime;
 
     const playerLatitude = rootState.location.player.latitude;
@@ -77,7 +80,7 @@ const actions = {
         }
       }
 
-      if (!newStatus && timeSinceOrderPlaced > cancellationTime) {        
+      if (!newStatus && timeSinceOrderPlaced > cancellationTime) {
         newStatus = 'cancelled';
       }
 
@@ -90,7 +93,7 @@ const actions = {
           });
 
           commit('UPDATE_ORDER_STATUS', { orderId: order.id, status: newStatus });
-        
+
         } catch (error) {
           console.error('Failed to update order status:', error);
           throw error; // or handle it differently if needed
@@ -150,6 +153,15 @@ const actions = {
     } catch (error) {
       console.error('Failed to fetch selected orders:', error)
       throw error
+    }
+  },
+  async clearQueuedOrders({ commit }) {
+    try {
+      await axios.post('order/clear_queued_orders/');
+      commit('REMOVE_QUEUED_ORDERS');
+    } catch (error) {
+      console.error('Error clearing queued orders:', error);
+      throw error;
     }
   }
 }
