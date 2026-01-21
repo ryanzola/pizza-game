@@ -12,7 +12,7 @@ const store = createStore({
     location,
     orders,
   },
-  state () {
+  state() {
     return {
       user: null,
       debug_mode: true,
@@ -22,23 +22,23 @@ const store = createStore({
         started_at: null,
         ended_at: null
       },
-      version: '1.07.07.16.40'
+      version: '1.01.21.26'
     }
   },
   getters: {
-    isAuthenticated (state) {
+    isAuthenticated(state) {
       return !!state.user
     },
-    user (state) {
+    user(state) {
       return state.user
     },
-    bank_amount (state) {
+    bank_amount(state) {
       return state.user.bank_amount
     },
-    savings_amount (state) {
+    savings_amount(state) {
       return state.user.savings_amount
     },
-    selected_orders (state) {
+    selected_orders(state) {
       return state.selected_orders
     }
   },
@@ -46,14 +46,14 @@ const store = createStore({
     TOGGLE_DEBUG_MODE(state) {
       state.debug_mode = !state.debug_mode
     },
-    SET_USER (state, data) {
+    SET_USER(state, data) {
       state.user = data
     },
-    SET_USER_TOKEN (state, token) {
+    SET_USER_TOKEN(state, token) {
       axios.defaults.headers.common['Authorization'] = `Token ${token}`;
       state.user_token = token
     },
-    SET_BANK (state, bank_amount) {
+    SET_BANK(state, bank_amount) {
       state.user.bank_amount = bank_amount
     },
     SET_SAVINGS(state, savings_amount) {
@@ -69,7 +69,7 @@ const store = createStore({
     }
   },
   actions: {
-    async logOut({ commit }){
+    async logOut({ commit }) {
       try {
         console.log("Signing out...");
         await signOut(auth);
@@ -92,7 +92,7 @@ const store = createStore({
         commit("SET_USER", null);
       }
     },
-    async fetchSavings({ commit}) {
+    async fetchSavings({ commit }) {
       try {
         const { data } = await axios.get('/auth/get_savings/')
 
@@ -127,7 +127,7 @@ const store = createStore({
       try {
         const { data } = await axios.post('/auth/update_bank/', {
           amount: tip
-        }) 
+        })
 
         commit('SET_BANK', data)
       } catch (error) {

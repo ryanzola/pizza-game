@@ -5,6 +5,7 @@ import Deliveries from './views/Deliveries.vue'
 import Bank from './views/Bank.vue'
 import Info from './views/Info.vue'
 import PastDeliveries from './views/PastDeliveries.vue'
+import Pizzeria from './views/Pizzeria.vue'
 
 import store from './store/store.js'
 
@@ -21,12 +22,17 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/pizzeria',
+    component: Pizzeria,
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/bank',
     component: Bank,
     meta: { requiresAuth: true },
   },
-  { 
-    path: '/info', 
+  {
+    path: '/info',
     component: Info,
     meta: { requiresAuth: true },
   },
