@@ -1,11 +1,15 @@
 <template>
   <nav aria-label="main navigation">
-    <router-link to="/">
-      <HomeIcon />
-    </router-link>
-
     <router-link to="/deliveries">
       <Square3Stack3DIcon />
+    </router-link>
+
+    <router-link to="/pizzeria">
+      <BuildingStorefrontIcon />
+    </router-link>
+
+    <router-link to="/">
+      <HomeIcon class="home" />
     </router-link>
 
     <router-link to="/bank">
@@ -25,9 +29,9 @@
 import { 
   CurrencyDollarIcon, 
   HomeIcon, 
-  MapPinIcon,
   InformationCircleIcon,
   Square3Stack3DIcon,
+  BuildingStorefrontIcon,
 } from '@heroicons/vue/24/outline'
 import { mapState } from 'vuex'
 
@@ -35,9 +39,9 @@ export default {
   components: {
     CurrencyDollarIcon,
     HomeIcon,
-    MapPinIcon,
     InformationCircleIcon,
     Square3Stack3DIcon,
+    BuildingStorefrontIcon,
   },
   computed: {
     ...mapState(['user'])
@@ -60,5 +64,9 @@ a svg {
   @apply 
     w-6 h-6 
     text-white;
+}
+
+.home {
+  @apply scale-150;
 }
 </style>
