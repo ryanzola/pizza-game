@@ -20,11 +20,9 @@ export default {
   },
   async mounted() {
     this.$store.dispatch('location/startGeolocation');
-    this.$store.dispatch('location/startInterval');
   },
   beforeDestroy() {
     this.$store.dispatch('location/stopGeolocation');
-    this.$store.dispatch('location/stopInterval');
   },
 };
 </script>

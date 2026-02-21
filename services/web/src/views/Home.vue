@@ -21,11 +21,11 @@
     <DebugLocation />
     <div class="p-4">
       <h1 class="text-2xl font-bold">Orders</h1>
-      <p :class="{ 'opacity-0': isNearPizzeria }" :aria-hidden="isNearPizzeria">Return to the pizzeria to get more orders</p>
+      <p :class="{ 'opacity-0': isNearPizzeria && !$store.state.debug_mode }" :aria-hidden="isNearPizzeria && !$store.state.debug_mode">Return to the pizzeria to get more orders</p>
     </div>
   </div>
 
-  <ul :class="['orders', { 'transform opacity-50': !isNearPizzeria }]">
+  <ul :class="['orders', { 'transform opacity-50': !isNearPizzeria && !$store.state.debug_mode }]">
     <Order v-for="order in pendingOrders" :key="order.id" :order="order" @change="toggleOrderSelection" />
   </ul>
 

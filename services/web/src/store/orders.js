@@ -67,12 +67,12 @@ const actions = {
       let newStatus = null;
       const timeSinceOrderPlaced = Date.now() - new Date(order.date_placed).getTime();
 
-      if (order.refData?.latitude && order.refData?.longitude) {
+      if (order.latitude && order.longitude) {
         const distanceToOrder = getDistanceFromLatLonInM(
           playerLatitude,
           playerLongitude,
-          order.refData?.latitude,
-          order.refData?.longitude
+          order.latitude,
+          order.longitude
         );
 
         if (distanceToOrder <= rootState.location.thresholdDistance) {
