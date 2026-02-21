@@ -21,7 +21,6 @@ const state = {
   locationAvailable: false,
   watcher: null,
   thresholdDistance: 100,
-  intervalID: null,
 };
 
 const mutations = {
@@ -38,9 +37,6 @@ const mutations = {
   setLastVisited(state, lastVisited) {
     state.lastVisited = lastVisited;
   },
-  setIntervalID(state, intervalID) {
-    state.intervalID = intervalID;
-  },
 };
 
 const actions = {
@@ -53,6 +49,9 @@ const actions = {
             longitude: position.coords.longitude
           });
           commit('setLocationAvailable', true);
+
+          // Trigger the distance check directly when geolocation changes
+          dispatch('orders/checkAndUpdateOrderStatus', null, { root: true });
         },
         error => {
           console.error(error.message);
@@ -60,7 +59,8 @@ const actions = {
         },
         {
           enableHighAccuracy: true,
-          timeout: 1000,
+          timeout: 5000,
+          maximumAge: 10000,
         }
       );
       commit('setWatcher', watcher);
@@ -72,18 +72,6 @@ const actions = {
     if (state.watcher) {
       navigator.geolocation.clearWatch(state.watcher);
       commit('setWatcher', null);
-    }
-  },
-  startInterval({ commit, dispatch }) {
-    const intervalID = setInterval(() => {
-      dispatch('orders/checkAndUpdateOrderStatus', null, { root: true });
-    }, 500);
-    commit('setIntervalID', intervalID);
-  },
-  stopInterval({ state, commit }) {
-    if (state.intervalID) {
-      clearInterval(state.intervalID);
-      commit('setIntervalID', null);
     }
   },
 };

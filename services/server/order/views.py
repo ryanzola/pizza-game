@@ -272,7 +272,15 @@ def attach_user_to_orders(request):
         # Must have an active session to accept new orders
         active_session = GameSession.objects.filter(user=user, status='active').order_by('-started_at').first()
         if not active_session:
-            return Response({'error': 'No active session. Start a session to accept orders.'}, status=403)
+            # End any previously active sessions for this user just in case
+            GameSession.objects.filter(user=user, status='active').update(status='ended', ended_at=timezone.now())
+
+            active_session = GameSession.objects.create(user=user)
+
+            # Start background spawner loop for this session
+            t = threading.Thread(target=_spawner_loop, args=(active_session.id,), daemon=True)
+            t.start()
+            _SESSION_THREADS[active_session.id] = t
 
         updated_orders = []
         for order_id in order_ids:
