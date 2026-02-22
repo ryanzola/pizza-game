@@ -6,8 +6,8 @@ from django.contrib.auth.models import User
 
 from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.permissions import IsAuthenticated, AllowAny
 
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 
 @api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
 def google_login(request):
     token = request.data.get('token')
     CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')

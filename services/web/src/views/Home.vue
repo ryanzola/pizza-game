@@ -1,57 +1,92 @@
 <template>
-  <div class="hero">
-    <p class="absolute top-0 right-0 bg-black bg-opacity-40 text-xs p-1 rounded-bl z-10">v{{ version }}</p>
-    <img v-if="isNearRestaurantDepot" src="../assets/depot.png" alt="the pizzeria storefront">
-    <img v-else src="../assets/pizzeria.jpg" alt="the pizzeria storefront">
+  <div class="bg-[#000000] h-full flex flex-col text-white relative">
+    <div class="hero relative h-56 md:h-80 overflow-hidden bg-[#1c1c1e] shadow-sm rounded-b-3xl shrink-0">
+      <p class="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded-full z-20 backdrop-blur-md">v{{ version }}</p>
+      
+      <div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10 transition-opacity"></div>
+      <img v-if="isNearRestaurantDepot" src="../assets/depot.png" alt="the pizzeria storefront" class="absolute object-cover w-full h-full opacity-80">
+      <img v-else src="../assets/pizzeria.jpg" alt="the pizzeria storefront" class="absolute object-cover w-full h-full opacity-80">
 
-    <div class="locator store" v-if="isNearPizzeria">
-      You are at the store
+      <div class="absolute bottom-4 left-4 right-4 z-20" v-if="!isNearRestaurantDepot">
+        <h2 class="text-white text-3xl font-bold tracking-tight shadow-sm mb-1">Ryan's Pizzeria</h2>
+        <div class="flex items-center gap-2">
+          <span class="bg-blue-500/90 text-white text-xs font-bold px-2 py-1 rounded-md backdrop-blur-md">
+            {{ isNearPizzeria ? 'At Store' : 'Out for Delivery' }}
+          </span>
+          <span class="text-gray-300 text-sm font-medium drop-shadow-md">
+            {{ Math.floor(waitTime / 1000 / 60) }} min wait
+          </span>
+        </div>
+      </div>
     </div>
 
-    <div class="locator not-store" v-if="!isNearPizzeria && !isNearRestaurantDepot">
-      You are not at the store
+    <!-- Main Content wrapper that handles internal scrolling -->
+    <div class="flex-1 overflow-y-auto flex flex-col">
+      <div class="px-4 pt-6 space-y-4 flex flex-col flex-1 pb-6">
+        <DebugLocation />
+        
+        <div class="flex justify-between items-end mb-2">
+          <h1 class="text-2xl font-bold tracking-tight text-white">Active Orders</h1>
+          <p v-if="isNearPizzeria && !$store.state.debug_mode" class="text-sm font-medium text-gray-500">Pull to refresh</p>
+        </div>
+
+        <p class="text-center font-semibold bg-red-900/40 text-red-400 py-3 rounded-xl border border-red-900/50" v-show="!locationAvailable">
+          Geolocation is not available or not permitted.
+        </p>
+
+        <ul :class="['orders-list flex flex-col gap-3 flex-1', { 'opacity-50 pointer-events-none': !isNearPizzeria && !$store.state.debug_mode }]">
+          <Order v-for="order in pendingOrders" :key="order.id" :order="order" :selected="selected.includes(order.id)" @change="toggleOrderSelection" />
+          
+          <!-- Empty State -->
+          <div v-if="pendingOrders.length === 0" class="flex flex-col items-center justify-center py-12 px-4 text-center bg-[#1c1c1e] rounded-2xl border border-gray-800 shadow-sm">
+            <div class="w-16 h-16 bg-[#2c2c2e] rounded-full flex items-center justify-center mb-3">
+               <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+            </div>
+            <h3 class="text-lg font-bold text-white">No active orders</h3>
+            <p class="text-sm text-gray-400 mt-1">Check back soon for more deliveries.</p>
+          </div>
+        </ul>
+      </div>
     </div>
 
-    <div class="wait-time" v-if="!isNearRestaurantDepot">
-      Current Wait Time: {{ Math.floor(waitTime / 1000 / 60) }} minutes
+    <!-- Sticky Bottom Action Bar -->
+    <!-- Changed to sticky mt-auto to naturally affix to the bottom of the flex container, rather than overlapping fixed elements -->
+    <div class="sticky mt-auto bottom-0 left-0 right-0 z-40 bg-[#121212]/90 backdrop-blur-xl border-t border-gray-800 pb-safe pt-3 px-4 rounded-t-3xl">
+      <div class="max-w-md mx-auto flex flex-col gap-2 pb-4">
+        
+        <button v-if="!hasActiveSession" class="action-btn bg-green-500 hover:bg-green-600 active:bg-green-700 text-white shadow-[0_0_15px_rgba(34,197,94,0.3)]" @click="start_session">
+          <span class="font-bold text-lg">Start Session</span>
+        </button>
+        <button v-else class="action-btn bg-[#2c2c2e] hover:bg-[#3a3a3c] active:bg-gray-700 border border-gray-700 text-white" @click="end_session">
+          <span class="font-bold text-lg">End Session</span>
+        </button>
+
+        <button v-if="isNearRestaurantDepot" class="action-btn bg-blue-500 text-white shadow-[0_0_15px_rgba(59,130,246,0.3)]" @click="() => {}">
+          <span class="font-bold">Restock Pizzeria</span>
+        </button>
+        
+        <div v-else-if="selected.length === 0 && $store.state.debug_mode" class="flex gap-2">
+          <button class="action-btn bg-[#2c2c2e] text-white hover:bg-[#3a3a3c] flex-1 border border-gray-700" @click="getNewOrder">Get Order</button>
+          <button class="action-btn bg-red-500/20 text-red-500 hover:bg-red-500/30 flex-1 border border-red-500/30" @click="clearQueuedOrders">Clear</button>
+        </div>
+        
+        <button v-else-if="selected.length > 0" class="action-btn bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white shadow-lg shadow-blue-500/30" @click="setDeliveries">
+          <span class="font-bold text-lg mx-auto">Take Deliveries ({{ selected.length }})</span>
+          <ChevronDoubleRightIcon class="absolute right-4 top-1/2 -translate-y-1/2 w-6 h-6 opacity-80" />
+        </button>
+      </div>
     </div>
-  </div>
 
-  <div>
-    <DebugLocation />
-    <div class="p-4">
-      <h1 class="text-2xl font-bold">Orders</h1>
-      <p :class="{ 'opacity-0': isNearPizzeria && !$store.state.debug_mode }" :aria-hidden="isNearPizzeria && !$store.state.debug_mode">Return to the pizzeria to get more orders</p>
+    <!-- Loading Overlay -->
+    <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" v-if="loading">
+      <div class="bg-[#1c1c1e] p-5 rounded-3xl shadow-2xl flex flex-col items-center gap-4 border border-gray-800 min-w-[140px]">
+        <svg class="animate-spin h-10 w-10 text-blue-500" viewBox="0 0 24 24">
+           <circle class="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+           <path class="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span class="font-semibold text-gray-200 text-sm">Processing</span>
+      </div>
     </div>
-  </div>
-
-  <ul :class="['orders', { 'transform opacity-50': !isNearPizzeria && !$store.state.debug_mode }]">
-    <Order v-for="order in pendingOrders" :key="order.id" :order="order" @change="toggleOrderSelection" />
-  </ul>
-
-  <div class="flex gap-2">
-    <button v-if="!hasActiveSession" class="order-btn bg-green-600 hover:bg-green-700 flex-1" @click="start_session">Start Session</button>
-    <button v-else class="order-btn bg-red-600 hover:bg-red-700 flex-1" @click="end_session">End Session</button>
-  </div>
-
-
-  <button v-if="isNearRestaurantDepot" class="order-btn" @click="() => {}">Restock Pizzeria</button>
-  <div v-else-if="selected.length === 0 && $store.state.debug_mode" class="flex border-t border-gray-500">
-    <button class="order-btn" @click="getNewOrder">Get New Order</button>
-    <button class="order-btn" @click="clearQueuedOrders">Clear Orders</button>
-  </div>
-  <button v-else-if="selected.length > 0" class="order-btn" @click="setDeliveries">
-    Take Deliveries
-    <ChevronDoubleRightIcon class="absolute right-4 top-1/2 transform translate-y-[-50%] w-6 h-6" />
-  </button>
-
-  <p class="text-center font-bold bg-red-500" v-show="!locationAvailable">Geolocation is not available or not permitted.</p>
-
-  <div class="h-screen w-screen fixed inset-0 grid place-items-center bg-black bg-opacity-30" v-if="loading">
-    <svg class="animate-spin h-12 w-12" viewBox="0 0 50 50">
-      <circle cx="25" cy="25" r="20" fill="none" stroke="white" stroke-width="5" stroke-linecap="round"
-              stroke-dasharray="100, 100" transform="rotate(-90, 25, 25)"></circle>
-    </svg>
   </div>
 </template>
 
@@ -159,48 +194,25 @@ export default {
 </script>
 
 <style lang="postcss" scoped>
-.hero {
-  @apply 
-  relative 
-  h-56 md:h-80
-  overflow-hidden;
-}
+/* Scoped styles are kept minimal, relying on Tailwind utilities */
 
-.hero img {
+.action-btn {
   @apply 
-    absolute -top-4 
-    w-full;
-}
-
-h2 {
-  @apply 
-    mb-2
-    font-bold 
-    text-lg;
-}
-
-.orders {
-  @apply 
-    p-4 flex-1 overflow-scroll flex flex-col gap-2 transition-all ease-in-out duration-200;
-}
-
-.order-btn {
-  @apply
     relative 
-    py-4
+    flex items-center justify-center
     w-full 
-    rounded-none
-    border-none
-    bg-slate-900;
+    h-[56px]
+    rounded-2xl
+    transition-all duration-200
+    active:scale-[0.97]
+    active:opacity-80
+    focus:outline-none
+    select-none;
 }
 
-.wait-time {
-  @apply 
-    absolute bottom-0 right-0 left-0
-    p-2
-    font-bold
-    text-xs text-right
-    text-white
-    bg-gradient-to-r from-transparent from-40% to-blue-600 to-70%;
+/* Add support for iOS bottom safe area */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 1rem);
 }
 </style>
+

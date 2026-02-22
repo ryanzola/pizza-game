@@ -1,26 +1,40 @@
 <template>
   <li>
-    <input :id="`order-${order.id}`" type="checkbox" class="hidden" :disabled="isDisabled" v-model="isChecked" @change="onChange" />
-    <label :for="`order-${order.id}`" :class="debug_mode ? 'pt-0' : 'pt-2'">
-      <div v-if="debug_mode" class="bg-yellow-500 text-black p-2 flex gap-4">
-        <p>
-          <strong>Latitude:</strong> {{ order.latitude.toFixed(4) }}
-        </p>
-        <p>
-          <strong>Longitude:</strong> {{ order.longitude.toFixed(4) }}
-        </p>
+    <input :id="`order-${order.id}`" type="checkbox" class="peer hidden" :disabled="isDisabled" v-model="isChecked" />
+    <label :for="`order-${order.id}`" 
+      class="relative flex flex-col gap-3 p-4 bg-[#1c1c1e] border-2 border-gray-800 shadow-sm rounded-2xl cursor-pointer transition-all duration-200 hover:border-gray-700 peer-checked:border-blue-500 peer-checked:bg-blue-900/20 peer-checked:ring-4 peer-checked:ring-blue-900/30">
+      
+      <!-- Selection Indicator -->
+      <div class="absolute top-4 right-4 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors" 
+           :class="isChecked ? 'bg-blue-500 border-blue-500' : 'border-gray-600'">
+        <svg v-if="isChecked" class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
       </div>
 
-      <div class="address-info px-2 grid grid-cols-2">
-        <p class="address">{{ order.address_name }}</p>
-        <p class="town">{{ order.town }}</p>
-        <p class="time">{{ formattedDate }}</p>
-        <p :class="['status', order.status]">{{ formattedStatus }}</p>
+      <div v-if="debug_mode" class="bg-yellow-900/40 text-yellow-500 text-xs px-3 py-2 rounded-xl flex gap-4 font-mono mb-1 mr-8">
+        <p><strong>Lat:</strong> {{ order.latitude.toFixed(4) }}</p>
+        <p><strong>Lng:</strong> {{ order.longitude.toFixed(4) }}</p>
       </div>
 
-      <ul class="items">
-        <li v-for="item, index in order.items" :key="index">
-          <p>{{ item }}</p>
+      <div class="flex flex-col pr-8">
+        <div class="flex justify-between items-start mb-1">
+          <p class="font-bold text-lg text-white leading-tight">{{ order.address_name }}</p>
+        </div>
+        <p class="text-sm text-gray-400 capitalize">{{ order.town }}</p>
+      </div>
+      
+      <div class="border-t border-gray-800 pt-3 flex justify-between items-center mt-1">
+        <div class="flex items-center gap-2">
+           <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+           <p class="text-sm font-medium text-gray-400">{{ formattedDate }}</p>
+        </div>
+        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold leading-none tracking-wide" :class="statusBadgeClasses">
+          {{ formattedStatus }}
+        </span>
+      </div>
+
+      <ul class="flex flex-wrap gap-2 mt-2">
+        <li v-for="(item, index) in order.items" :key="index" class="bg-gray-800 text-gray-300 text-xs px-2.5 py-1 rounded-md font-medium">
+          {{ item }}
         </li>
       </ul>
 
@@ -37,13 +51,13 @@ export default {
   components: {
     VueMarkdown
   },
-  emits: ['change', 'input'],
+  emits: ['change'],
   props: {
     order: {
       type: Object,
       required: true,
     },
-    value: {
+    selected: {
       type: Boolean,
       default: false
     }
@@ -52,15 +66,14 @@ export default {
     ...mapState(['debug_mode']),
     isChecked: {
       get() {
-        return this.value;
+        return this.selected;
       },
-      set(newValue) {
-        this.$emit('input', newValue);
+      set() {
+        this.$emit('change', this.order.id);
       }
     },
     isDisabled() {
-      return false
-      // return this.order.status === 'delivered' || this.order.status === 'pending';
+      return false;
     },
     formattedDate() {
       const date = new Date(this.order.date_placed);
@@ -69,90 +82,30 @@ export default {
       const ampm = hours >= 12 ? 'PM' : 'AM';
       
       hours = hours % 12;
-      hours = hours ? hours : 12; // the hour '0' should be '12'
+      hours = hours ? hours : 12;
       
       return `${hours}:${minutes} ${ampm}`;
     },
     formattedStatus() {
-      // remove underscores and capitalize
       return this.order.status?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    },
+    statusBadgeClasses() {
+      switch (this.order.status) {
+        case 'queued':
+          return 'bg-yellow-900/30 text-yellow-500';
+        case 'en_route':
+          return 'bg-blue-900/30 text-blue-400';
+        case 'delivered':
+          return 'bg-green-900/30 text-green-400';
+        case 'cancelled':
+          return 'bg-red-900/30 text-red-400';
+        default:
+          return 'bg-gray-800 text-gray-300';
+      }
     }
-  },
-  methods: {
-    onChange() {
-      this.$emit('change', this.order.id);
-    }
-  },
+  }
 };
 </script>
 
 <style lang="postcss" scoped>
-li label {
-  @apply 
-    relative
-    flex flex-col gap-2
-    border border-white 
-    rounded
-    overflow-hidden;
-}
-
-li input[type="checkbox"]:checked + label {
-  @apply bg-white bg-opacity-20;
-}
-
-.address {
-  @apply 
-    font-bold col-start-1;
-}
-
-.town {
-  @apply
-    row-start-2
-    text-xs 
-    capitalize;
-}
-
-.time {
-  @apply 
-    col-start-2 row-start-1
-    text-xs text-right
-    text-gray-500;
-}
-
-.items {
-  @apply 
-    px-2 pb-2
-    col-start-1 col-span-2
-    text-xs
-    text-gray-500;
-}
-
-.status {
-  @apply
-    absolute
-    min-w-[72.06px]
-    right-0 bottom-0
-    text-white
-    text-center
-    rounded-tl
-    font-bold
-    text-xs
-    p-2;
-}
-
-.status.queued {
-  @apply bg-yellow-500;
-}
-
-.status.en_route {
-  @apply bg-blue-500;
-}
-
-.status.delivered {
-  @apply bg-green-500;
-}
-
-.status.cancelled {
-  @apply bg-red-500;
-}
 </style>

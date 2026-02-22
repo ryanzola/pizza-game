@@ -1,5 +1,5 @@
 <template>
-  <main class="h-full flex flex-col overflow-scroll">
+  <main class="h-full flex flex-col relative w-full overflow-hidden">
     <router-view/>
   </main>
   <Navbar v-if="$store.getters.isAuthenticated" />
