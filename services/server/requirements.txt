@@ -38,7 +38,7 @@ idna==3.4
 multidict==6.0.4
 oauthlib==3.2.2
 openai==1.35.7
-packaging==23.2
+packaging>=24.0
 postgrest==0.16.8
 proto-plus==1.22.3
 protobuf==4.25.1
