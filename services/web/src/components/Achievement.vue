@@ -1,17 +1,17 @@
 <template>
-  <li :class="['achievement-card', color]">
-    <div class="h-16 w-16 min-w-[64px]">
-      <img v-if="date" src="../assets/achievement-checked.svg" alt="" class="w-full h-full" />
-      <img v-else="date" src="../assets/achievement-empty.svg" alt="" class="w-full h-full" />
+  <li :class="['min-h-[100px] p-4 flex items-center gap-4 relative rounded-2xl border', color.border, color.bg]">
+    <div class="h-14 w-14 min-w-[56px] flex items-center justify-center rounded-full" :class="color.iconBg">
+      <img v-if="date" src="../assets/achievement-checked.svg" alt="" class="w-8 h-8 opacity-90" />
+      <img v-else src="../assets/achievement-empty.svg" alt="" class="w-8 h-8 opacity-50" />
     </div>
 
-    <div class="space-y-2">
-      <h3 v-if="date" class="text-lg font-semibold">{{ title }}</h3>
-      <h3 v-else class="text-lg font-semibold">???</h3>
+    <div class="space-y-1">
+      <h3 v-if="date" class="text-lg font-bold text-white tracking-tight leading-tight">{{ title }}</h3>
+      <h3 v-else class="text-lg font-bold text-gray-500 tracking-tight leading-tight">???</h3>
       
-      <p v-if="date" class="text-xs">{{ description }}</p>
+      <p v-if="date" class="text-sm text-gray-400 leading-snug">{{ description }}</p>
 
-      <div v-if="date" class="text-indigo-200 text-sm">Unlocked on {{ date }}</div>
+      <div v-if="date" class="mt-2 text-xs font-semibold tracking-wide" :class="color.text">Unlocked on {{ date }}</div>
     </div>
   </li>
 </template>
@@ -35,27 +35,27 @@ export default {
   },
   data() {
     return {
+      // Sophisticated dark mode palette mapped as objects
       colors: [
-        'bg-blue-200',
-        'bg-green-200',
-        'bg-yellow-200',
-        'bg-red-200',
-        'bg-pink-200',
-        'bg-purple-200',
-        'bg-indigo-200',
+        { bg: 'bg-blue-900/20', border: 'border-blue-900/40', text: 'text-blue-400', iconBg: 'bg-blue-500/20' },
+        { bg: 'bg-green-900/20', border: 'border-green-900/40', text: 'text-green-400', iconBg: 'bg-green-500/20' },
+        { bg: 'bg-yellow-900/20', border: 'border-yellow-900/40', text: 'text-yellow-500', iconBg: 'bg-yellow-500/20' },
+        { bg: 'bg-purple-900/20', border: 'border-purple-900/40', text: 'text-purple-400', iconBg: 'bg-purple-500/20' },
+        { bg: 'bg-pink-900/20', border: 'border-pink-900/40', text: 'text-pink-400', iconBg: 'bg-pink-500/20' },
       ]
     }
   },
   computed: {
     color() {
-      return this.date ? this.colors[Math.floor(Math.random() * this.colors.length)] : 'bg-gray-200'
+      if (!this.date) {
+        return { bg: 'bg-gray-800/40', border: 'border-gray-800', text: 'text-gray-500', iconBg: 'bg-gray-800' }
+      }
+      return this.colors[Math.floor(Math.random() * this.colors.length)]
     }
   }
 }
 </script>
 
 <style scoped>
-.achievement-card {
-  @apply min-h-[128px] p-4 flex items-center gap-4 relative rounded bg-opacity-10 border border-white;
-}
+/* Removed old achievement-card custom CSS in favor of Tailwind classes */
 </style>

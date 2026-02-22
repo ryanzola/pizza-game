@@ -9,37 +9,58 @@ import './index.css'
 import './style.css'
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/service-worker.js').then(function(registration) {
+  navigator.serviceWorker.register('/service-worker.js').then(function (registration) {
     console.log('Service Worker registered with scope:', registration.scope);
-  }).catch(function(error) {
+  }).catch(function (error) {
     console.log('Service Worker registration failed:', error);
   });
 }
 
-axios.defaults.baseURL = process.env.NODE_ENV === 'development' 
-                         ? 'http://localhost:8000/api/v1' 
-                         : import.meta.env.VITE_API_URL;
+axios.defaults.baseURL = process.env.NODE_ENV === 'development'
+  ? 'http://localhost:8000/api/v1'
+  : import.meta.env.VITE_API_URL;
 
-// Function to set the auth token for Axios
+import { onAuthStateChanged } from 'firebase/auth'
+import auth from './firebase/init'
+
+let app;
+
+// Function to synchronously set Axios auth token on initial load from localStorage
 function initializeAxiosAuthentication() {
-  console.log("Initializing Axios Authentication...")
-  const store = JSON.parse(localStorage.getItem('vuex'));
-  if (store && store.user) {
+  const vuexState = JSON.parse(localStorage.getItem('vuex'));
+  if (vuexState && vuexState.user) {
     const token = localStorage.getItem('userToken');
-
     if (token) {
-      console.log("Setting Axios Authorization header...")
       axios.defaults.headers.common['Authorization'] = `Token ${token}`;
-    } else {
-      console.log("No token found")
+      store.commit('SET_USER_TOKEN', token);
     }
   }
 }
 
 initializeAxiosAuthentication();
 
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    try {
+      const token = await user.getIdToken();
+      const { data } = await axios.post('/auth/google_login/', { token: token });
+      store.commit('SET_USER', data.user);
+      store.commit('SET_USER_TOKEN', data.token);
+      localStorage.setItem('userToken', data.token);
+    } catch (e) {
+      console.error("Error exchanging Firebase token for backend token:", e);
+      store.dispatch('logOut');
+    }
+  } else {
+    store.commit('SET_USER', null);
+    store.commit('SET_USER_TOKEN', null);
+    localStorage.removeItem('userToken');
+  }
 
-const app = createApp(App)
-app.use(router)
-app.use(store)
-app.mount('#app')
+  if (!app) {
+    app = createApp(App)
+    app.use(router)
+    app.use(store)
+    app.mount('#app')
+  }
+})

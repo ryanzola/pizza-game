@@ -1,58 +1,67 @@
 <template>
-  <section>
-    <div class="flex items-center gap-8">
-      <span class="relative flex shrink-0 overflow-hidden rounded-full h-24 w-24">
-        <img class="absolute h-full w-full object-cover" :src="$store.getters.user?.picture || '../assets/pizza.svg'" alt="ME">
-      </span>
-      <div class="grid gap-0.5 text-sm">
-        <h1 class="font-bold text-2xl text-white">{{ $store.getters.user?.name }}</h1>
-        <div class="text-white">{{ $store.getters.user?.email }}</div>
-      </div>
-    </div>
+  <div class="bg-[#000000] flex-1 overflow-y-auto w-full flex flex-col items-center">
+    <div class="w-full max-w-md p-4 pb-32 space-y-6">
+      
+      <!-- Profile Card -->
+      <section class="bg-[#1c1c1e] p-5 rounded-3xl shadow-sm border border-gray-800 flex flex-col gap-5">
+        <div class="flex items-center gap-5">
+          <span class="relative flex shrink-0 overflow-hidden rounded-full h-20 w-20 border-2 border-gray-700">
+            <img class="absolute h-full w-full object-cover" :src="$store.getters.user?.picture || '../assets/pizza.svg'" alt="ME">
+          </span>
+          <div class="flex flex-col gap-1">
+            <h1 class="font-bold text-2xl tracking-tight text-white">{{ $store.getters.user?.name }}</h1>
+            <div class="text-gray-400 text-sm">{{ $store.getters.user?.email }}</div>
+          </div>
+        </div>
 
-    <button class="w-full text-white bg-[#d0021b] px-3 py-2 rounded" @click="logOut">Log Out</button>
-  </section>
+        <button class="w-full font-semibold text-lg text-red-500 bg-red-500/10 hover:bg-red-500/20 active:bg-red-500/30 border border-red-500/20 py-3 rounded-2xl transition-colors" @click="logOut">
+          Log Out
+        </button>
+      </section>
 
-  <section>
-    <h2 class="text-2xl font-bold text-white">Achievements</h2>
-
-    <ul class="grid grid-cols-1 gap-2">
-      <Achievement 
-        v-for="achievement in sortedAchievements"
-        :title="achievement.title"
-        :description="achievement.description"
-        :date="achievement.date"
-      />
-
-    </ul>
-  </section>
-
-  <section>
-    <div class="flex items-center justify-between">
-      <div>
-        <h2 class="text-2xl font-bold text-white">Developer Mode</h2>
-        <p class="text-white text-sm">Test features from the couch.</p>
-      </div>
-      <div class="relative pr-4">
-        <label for="debug" class="cursor-pointer">
-          <input 
-            class="scale-150"
-            type="checkbox" 
-            id="debug" 
-            name="debug"
-            :checked="$store.state.debug_mode"
-            @change="toggleDebugMode"
+      <!-- Achievements Section -->
+      <section class="bg-[#1c1c1e] p-5 rounded-3xl shadow-sm border border-gray-800">
+        <h2 class="text-xl font-bold text-white mb-4 tracking-tight">Achievements</h2>
+        <ul class="flex flex-col gap-3">
+          <Achievement 
+            v-for="achievement in sortedAchievements"
+            :key="achievement.title"
+            :title="achievement.title"
+            :description="achievement.description"
+            :date="achievement.date"
           />
-        </label>
-      </div>
+        </ul>
+      </section>
+
+      <!-- Settings Card -->
+      <section class="bg-[#1c1c1e] p-5 rounded-3xl shadow-sm border border-gray-800">
+        <div class="flex items-center justify-between">
+          <div class="flex flex-col">
+            <h2 class="text-xl font-bold text-white tracking-tight leading-tight">Developer Mode</h2>
+            <p class="text-gray-400 text-sm mt-1">Test features from the couch.</p>
+          </div>
+          <div class="relative">
+            <label for="debug" class="cursor-pointer relative inline-flex items-center">
+              <input 
+                class="sr-only peer"
+                type="checkbox" 
+                id="debug" 
+                name="debug"
+                :checked="$store.state.debug_mode"
+                @change="toggleDebugMode"
+              />
+              <div class="w-14 h-8 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-7 after:w-7 after:transition-all peer-checked:bg-blue-500 border border-gray-600"></div>
+            </label>
+          </div>
+        </div>
+      </section>
+      
     </div>
-  </section>
+  </div>
 </template>
 
 <style scoped>
-section {
-  @apply p-4 space-y-4;
-}
+/* Scoped styles removed in favor of direct Tailwind utility classes */
 </style>
 
 <script>
