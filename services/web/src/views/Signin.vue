@@ -1,5 +1,5 @@
 <template>
-    <div class="min-h-[100dvh] w-full bg-[#000000] flex flex-col items-center justify-center relative overflow-hidden">
+    <div class="min-h-[100dvh] w-full flex flex-col items-center justify-center relative overflow-hidden">
       <!-- Ambient Glow Background Effect -->
       <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[120%] h-96 bg-gradient-to-b from-blue-900/20 to-transparent blur-3xl opacity-50 pointer-events-none rounded-b-full"></div>
 

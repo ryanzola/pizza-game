@@ -1,6 +1,6 @@
 :root {
   color-scheme: light dark;
-  background-color: #242424;
+  background-color: #000000;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -15,8 +15,7 @@
 }
 
 body {
-  @apply 
-    min-w-[375px] h-screen
+  @apply min-w-[375px] h-screen
 }
 
 #app {
@@ -28,17 +27,7 @@ h1 {
 }
 
 button {
-  @apply
-    px-5 py-2
-    text-base font-normal
-    bg-gray-800
-    border border-transparent 
-    focus:outline-4 
-    focus-visible:outline-4 
-    focus:outline-indigo-700
-    focus-visible:outline-indigo-700
-    hover:border-indigo-700
-    transition-colors duration-200 ease-out;
+  @apply px-5 py-2 text-base font-normal bg-gray-800 border border-transparent focus:outline-4 focus-visible:outline-4 focus:outline-indigo-700 focus-visible:outline-indigo-700 hover:border-indigo-700 transition-colors duration-200 ease-out;
 }
 
 .card {
@@ -54,20 +43,18 @@ button {
     color: #213547;
     background-color: #ffffff;
   }
+
   a:hover {
     color: #747bff;
   }
+
   button {
     background-color: #f9f9f9;
   }
 }
 
 .locator {
-  @apply 
-    absolute bottom-0 left-0 right-0
-    p-2
-    font-bold
-    text-xs text-white;
+  @apply absolute bottom-0 left-0 right-0 p-2 font-bold text-xs text-white;
 }
 
 .locator.store {
