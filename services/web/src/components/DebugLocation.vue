@@ -1,20 +1,20 @@
 <template>
-  <div v-if="$store.state.debug_mode" class="bg-yellow-500 text-black p-2 flex gap-4">
+  <div v-if="debug_mode" class="bg-yellow-900/40 text-yellow-500 px-3 py-2 rounded-xl flex gap-4 justify-between items-center mb-4 border border-yellow-900/50 shadow-inner font-mono text-sm max-w-sm mx-auto w-full">
     <p>
-      <strong>Latitude:</strong> {{ player.latitude.toFixed(4) }}
+      <strong>Lat:</strong> {{ player.latitude.toFixed(4) }}
     </p>
     <p>
-      <strong>Longitude:</strong> {{ player.longitude.toFixed(4) }}
+      <strong>Lng:</strong> {{ player.longitude.toFixed(4) }}
     </p>
   </div>
 </template>
 
-<script>
-import { mapGetters } from 'vuex'
+<script setup>
+import { computed } from 'vue';
+import { useStore } from 'vuex';
 
-export default {
-  computed: {
-    ...mapGetters('location', ['player']),
-  },
-}
+const store = useStore();
+
+const debug_mode = computed(() => store.state.debug_mode);
+const player = computed(() => store.getters['location/player']);
 </script>
