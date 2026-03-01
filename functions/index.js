@@ -275,8 +275,13 @@ exports.processOrderAchievements = onDocumentUpdated("orders/{orderId}", async (
           stats.unique_streets.push(street);
         }
 
-        // 3. Write Stats Back
+        // 3. Write Stats Back & Update User Bank
         transaction.set(statsRef, stats, { merge: true });
+
+        const userRef = db.collection('users').doc(userId);
+        transaction.set(userRef, {
+          bank_amount: admin.firestore.FieldValue.increment(orderAfter.tip || 0)
+        }, { merge: true });
 
         // 4. Check & Award Achievements
         const achievementsRef = db.collection('users').doc(userId).collection('achievements');
