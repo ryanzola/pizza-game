@@ -4,8 +4,8 @@
   "start_url": ".",
   "display": "fullscreen",
   "orientation": "portrait",
-  "theme_color": "#d0021b",
-  "background_color": "#242424",
+  "theme_color": "#3E456B",
+  "background_color": "#000000",
   "description": "Make that ass clap",
   "icons": [
     {
@@ -27,6 +27,11 @@
     {
         "src": "/icon-512x512.png",
         "sizes": "512x512",
+        "type": "image/png"
+    },
+    {
+        "src": "/icon-1024x1024.png",
+        "sizes": "1024x1024",
         "type": "image/png"
     }
   ],

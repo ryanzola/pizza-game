@@ -283,6 +283,21 @@ exports.processOrderAchievements = onDocumentUpdated("orders/{orderId}", async (
           bank_amount: admin.firestore.FieldValue.increment(orderAfter.tip || 0)
         }, { merge: true });
 
+        // Update Pizzeria Finances
+        const pizzeriaRef = db.collection('pizzeria').doc('finances');
+        const pizzeriaDoc = await transaction.get(pizzeriaRef);
+        const revenue = orderAfter.total_cost || 0;
+
+        if (!pizzeriaDoc.exists) {
+          transaction.set(pizzeriaRef, {
+            bank_balance: 1000 + revenue
+          });
+        } else {
+          transaction.set(pizzeriaRef, {
+            bank_balance: admin.firestore.FieldValue.increment(revenue)
+          }, { merge: true });
+        }
+
         // 4. Check & Award Achievements
         const achievementsRef = db.collection('users').doc(userId).collection('achievements');
         const unlockedDocs = await transaction.get(achievementsRef);
