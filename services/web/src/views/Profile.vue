@@ -6,8 +6,9 @@
        <div class="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none" style="background-image: radial-gradient(circle at 20% 150%, white 0%, transparent 50%); mix-blend-mode: overlay;"></div>
       
       <div class="relative z-10 flex flex-col items-center">
-        <div class="h-24 w-24 bg-gray-800 rounded-full border-4 border-orange-300 shadow-2xl flex items-center justify-center text-5xl mb-3">
-          🧑‍🍳
+        <div class="h-24 w-24 bg-gray-800 rounded-full border-4 border-orange-300 shadow-2xl flex items-center justify-center text-5xl mb-3 overflow-hidden">
+          <img v-if="userPhoto" :src="userPhoto" alt="Profile avatar" class="h-full w-full object-cover">
+          <span v-else>🧑‍🍳</span>
         </div>
         <h1 class="text-3xl font-black text-white tracking-tight text-center">{{ userName || 'Driver' }}</h1>
         <p class="text-orange-100 font-medium text-sm mt-1">Level {{ Math.max(1, Math.floor(lifetimeStats.total_deliveries / 10)) }} Pro</p>
@@ -145,6 +146,11 @@ const ACHIEVEMENT_CATALOG = [
 const userName = computed(() => {
   const user = store.getters.user;
   return user?.displayName || user?.email?.split('@')[0] || 'Driver';
+});
+
+const userPhoto = computed(() => {
+  const user = store.getters.user;
+  return user?.picture || user?.photoURL || null;
 });
 
 const lifetimeStats = computed(() => store.getters['achievements/lifetime_stats'] || {});
