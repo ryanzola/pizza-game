@@ -7,8 +7,7 @@
       
       <div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10"></div>
       
-      <!-- Bank Image (Placeholder for now, reusing wf.jpeg logic) -->
-      <img src="../assets/wf.jpeg" alt="The Bank" class="absolute object-cover w-full h-full opacity-80">
+      <img src="../assets/bank.png" alt="The Bank" class="absolute object-cover w-full h-full opacity-80">
 
       <div class="absolute bottom-4 left-4 right-4 z-20">
         <h2 class="text-white text-3xl font-bold tracking-tight shadow-sm mb-1">National Bank</h2>

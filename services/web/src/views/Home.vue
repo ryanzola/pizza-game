@@ -5,7 +5,7 @@
       
       <div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10 transition-opacity"></div>
       <img v-if="isNearRestaurantDepot" src="../assets/depot.png" alt="the pizzeria storefront" class="absolute object-cover w-full h-full opacity-80">
-      <img v-else src="../assets/pizzeria.jpg" alt="the pizzeria storefront" class="absolute object-cover w-full h-full opacity-80">
+      <img v-else src="../assets/pizzeria.png" alt="the pizzeria storefront" class="absolute object-cover w-full h-full opacity-80">
 
       <div class="absolute bottom-4 left-4 right-4 z-20 flex justify-between items-end" v-if="!isNearRestaurantDepot">
         <div>
