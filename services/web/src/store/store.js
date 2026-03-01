@@ -1,13 +1,17 @@
 import { createStore } from 'vuex'
 import { signOut } from "firebase/auth";
 import { auth, db } from '../firebase/init'
-import { doc, getDoc, updateDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, getDoc, updateDoc, collection, addDoc, serverTimestamp, setDoc } from 'firebase/firestore'
+import { initMessaging } from '../firebase/init';
+import { getToken, onMessage } from "firebase/messaging";
 
 import location from './location';
 import orders from './orders';
 import achievements from './achievements';
 
 import createPersistedState from "vuex-persistedstate";
+
+let wakeLockSentinel = null;
 
 const store = createStore({
   modules: {
@@ -29,6 +33,9 @@ const store = createStore({
     }
   },
   getters: {
+    hasActiveSession(state) {
+      return state.session?.status === 'active' && !state.session?.ended_at;
+    },
     isAuthenticated(state) {
       return !!state.user
     },
@@ -68,7 +75,29 @@ const store = createStore({
     }
   },
   actions: {
-    async logOut({ commit }) {
+    async acquireWakeLock() {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLockSentinel = await navigator.wakeLock.request('screen');
+          console.log('Screen Wake Lock acquired.');
+
+          wakeLockSentinel.addEventListener('release', () => {
+            console.log('Screen Wake Lock released manually or automatically.');
+          });
+        } catch (err) {
+          console.error(`Wake Lock error: ${err.name}, ${err.message}`);
+        }
+      } else {
+        console.warn('Screen Wake Lock API not supported.');
+      }
+    },
+    async releaseWakeLock() {
+      if (wakeLockSentinel !== null) {
+        await wakeLockSentinel.release();
+        wakeLockSentinel = null;
+      }
+    },
+    async logOut({ commit, dispatch }) {
       try {
         console.log("Signing out...");
         await signOut(auth);
@@ -87,9 +116,41 @@ const store = createStore({
       if (user) {
         commit("SET_USER", user);
         dispatch('achievements/initAchievementListeners');
+        dispatch('initializeMessaging', user.uid);
       } else {
         commit("SET_USER", null);
       }
+    },
+    async initializeMessaging({ state }, uid) {
+      if (!('Notification' in window)) return;
+
+      try {
+        const messaging = await initMessaging();
+        if (!messaging) return;
+
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+          try {
+            // For testing/production this requires a valid VAPID key in the .env file
+            const token = await getToken(messaging, { vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY });
+            if (token) {
+              console.log('FCM Token acquired');
+              const tokenRef = doc(db, 'users', uid, 'tokens', token);
+              await setDoc(tokenRef, {
+                token: token,
+                updated_at: new Date().toISOString()
+              });
+            }
+          } catch (e) {
+            console.log('FCM getToken error (likely missing VAPID key):', e.message);
+          }
+
+          onMessage(messaging, (payload) => {
+            console.log('Message received. ', payload);
+            alert(`🚨 ${payload.notification.title}\n${payload.notification.body}`);
+          });
+        }
+      } catch (e) { console.error('Error initializing FCM:', e) }
     },
     async fetchSavings({ commit, state }) {
       try {
@@ -179,6 +240,8 @@ const store = createStore({
           started_at: new Date().toISOString(),
           ended_at: null
         });
+
+        await dispatch('acquireWakeLock');
       } catch (error) {
         console.error('Failed to start session:', error)
         throw error
@@ -200,6 +263,8 @@ const store = createStore({
           status: 'ended',
           ended_at: new Date().toISOString()
         });
+
+        await dispatch('releaseWakeLock');
       } catch (error) {
         console.error('Failed to end session:', error)
         throw error

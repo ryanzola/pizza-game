@@ -162,8 +162,13 @@ exports.generateOrder = functions.https.onCall(async (request) => {
 
     const { total, tip } = estimatedOrderCost(familySize);
 
+    // Roll for VIP order (15% chance)
+    const isVip = Math.random() < 0.15;
+    const finalTip = isVip ? parseFloat((tip * 3).toFixed(2)) : tip;
+
     const newOrder = {
       status: 'queued',
+      is_vip: isVip,
       date_placed: admin.firestore.FieldValue.serverTimestamp(),
       date_delivered: null,
       user_id: null,
@@ -175,13 +180,40 @@ exports.generateOrder = functions.https.onCall(async (request) => {
       },
       items: orderDetails.order_items,
       total_cost: total,
-      tip: tip,
+      tip: finalTip,
       latitude: lat,
       longitude: lon
     };
 
     // Save strictly to Firestore bypassing the client
     const docRef = await db.collection("orders").add(newOrder);
+
+    // Send Push Notification for VIP Orders
+    if (isVip) {
+      try {
+        const tokensSnapshot = await db.collectionGroup('tokens').get();
+        const tokens = tokensSnapshot.docs.map(d => d.data().token);
+
+        if (tokens.length > 0) {
+          const message = {
+            notification: {
+              title: '💎 VIP Order Alert!',
+              body: `A massive VIP pizza order was just placed nearby. Big tip guaranteed!`
+            },
+            tokens: tokens
+          };
+          // Try both methods for SDK version compatibility
+          if (admin.messaging().sendEachForMulticast) {
+            await admin.messaging().sendEachForMulticast(message);
+          } else {
+            await admin.messaging().sendMulticast(message);
+          }
+          console.log(`Sent VIP push notification to ${tokens.length} devices.`);
+        }
+      } catch (pushError) {
+        console.error('Error sending VIP push notification:', pushError);
+      }
+    }
 
     return {
       success: true,

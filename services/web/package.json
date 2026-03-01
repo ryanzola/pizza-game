@@ -11,7 +11,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "deploy": "gsutil -m cp -r dist/* gs://pizza-app/"
+    "deploy": "cd ../.. && firebase deploy --only hosting"
   },
   "dependencies": {
     "@heroicons/vue": "^2.0.18",
