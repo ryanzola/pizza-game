@@ -2,7 +2,7 @@ importScripts('https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js'
 importScripts('https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging-compat.js');
 
 firebase.initializeApp({
-  apiKey: new URL(location).searchParams.get('apiKey'), // Fallback if needed
+  apiKey: "AIzaSyDuA1-gF45FSpuc4VbxJWqoGEccJ3TR6K8",
   projectId: "pizzamango-376923",
   messagingSenderId: "778990538357",
   appId: "1:778990538357:web:4cdf9eb1392cc4a621f23c",

@@ -10,10 +10,16 @@
         </div>
         <div class="flex-1">
           <h3 class="text-white font-bold text-sm leading-tight">Install Pizza App</h3>
-          <p class="text-gray-400 text-xs mt-0.5 leading-snug">Add to your home screen for a better experience.</p>
+          <p v-if="isIosPrompt" class="text-gray-400 text-xs mt-0.5 leading-snug">
+            Tap <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline text-blue-400 -mt-1 mx-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg> Share then "Add to Home Screen"
+          </p>
+          <p v-else class="text-gray-400 text-xs mt-0.5 leading-snug">
+            Add to your home screen for a better experience.
+          </p>
         </div>
         <div class="flex flex-col space-y-2">
           <button 
+            v-if="!isIosPrompt"
             @click="installApp" 
             class="bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg transition-colors shadow-sm"
           >
@@ -23,7 +29,7 @@
             @click="dismissPrompt" 
             class="text-gray-400 hover:text-white text-xs font-semibold py-1 px-3 transition-colors"
           >
-            Not now
+            {{ isIosPrompt ? 'Got it' : 'Not now' }}
           </button>
         </div>
       </div>
@@ -35,7 +41,17 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 
 const showPrompt = ref(false);
+const isIosPrompt = ref(false);
 let deferredPrompt = null;
+
+const isIos = () => {
+  const userAgent = window.navigator.userAgent.toLowerCase();
+  return /iphone|ipad|ipod/.test(userAgent);
+};
+
+const isInStandaloneMode = () => {
+  return ('standalone' in window.navigator && window.navigator.standalone) || window.matchMedia('(display-mode: standalone)').matches;
+};
 
 const handleBeforeInstallPrompt = (e) => {
   // Prevent the mini-infobar from appearing on mobile
@@ -57,6 +73,12 @@ const handleAppInstalled = () => {
 onMounted(() => {
   window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
   window.addEventListener('appinstalled', handleAppInstalled);
+
+  // iOS does not support beforeinstallprompt, we manually show instructions if not standalone
+  if (isIos() && !isInStandaloneMode()) {
+    isIosPrompt.value = true;
+    showPrompt.value = true;
+  }
 });
 
 onUnmounted(() => {
