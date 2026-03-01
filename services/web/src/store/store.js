@@ -1,9 +1,11 @@
 import { createStore } from 'vuex'
 import { signOut } from "firebase/auth";
-import auth from '../firebase/init'
-import axios from 'axios'
+import { auth, db } from '../firebase/init'
+import { doc, getDoc, updateDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore'
+
 import location from './location';
 import orders from './orders';
+import achievements from './achievements';
 
 import createPersistedState from "vuex-persistedstate";
 
@@ -11,6 +13,7 @@ const store = createStore({
   modules: {
     location,
     orders,
+    achievements,
   },
   state() {
     return {
@@ -49,10 +52,6 @@ const store = createStore({
     SET_USER(state, data) {
       state.user = data
     },
-    SET_USER_TOKEN(state, token) {
-      axios.defaults.headers.common['Authorization'] = `Token ${token}`;
-      state.user_token = token
-    },
     SET_BANK(state, bank_amount) {
       state.user.bank_amount = bank_amount
     },
@@ -75,82 +74,132 @@ const store = createStore({
         await signOut(auth);
         console.log("Signed out successfully.");
         commit('SET_USER', null);
-        commit('SET_USER_TOKEN', null);
+        dispatch('achievements/stopAchievementListeners');
 
         localStorage.removeItem('vuex');
-        localStorage.removeItem('userToken');
       }
       catch (error) {
         console.error("Error during sign out:", error);
         throw error;
       }
     },
-    async fetchUser({ commit }, user) {
+    async fetchUser({ commit, dispatch }, user) {
       if (user) {
         commit("SET_USER", user);
+        dispatch('achievements/initAchievementListeners');
       } else {
         commit("SET_USER", null);
       }
     },
-    async fetchSavings({ commit }) {
+    async fetchSavings({ commit, state }) {
       try {
-        const { data } = await axios.get('/auth/get_savings/')
+        if (!state.user?.uid) return;
+        const userRef = doc(db, 'users', state.user.uid);
+        const userSnap = await getDoc(userRef);
 
-        commit('SET_SAVINGS', data)
+        if (userSnap.exists()) {
+          commit('SET_SAVINGS', userSnap.data().savings_amount || 0);
+        }
       } catch (error) {
         console.error('Failed to fetch savings:', error)
         throw error
       }
     },
-    async update_savings({ commit }) {
+    async update_savings({ commit, state }) {
       try {
-        const { data } = await axios.post('/auth/update_savings/')
+        if (!state.user?.uid) return;
 
-        commit('SET_SAVINGS', data)
-        commit('SET_BANK', 0)
+        const currentBank = state.user.bank_amount || 0;
+        const currentSavings = state.user.savings_amount || 0;
+        const newSavings = currentSavings + currentBank;
+
+        const userRef = doc(db, 'users', state.user.uid);
+        await updateDoc(userRef, {
+          savings_amount: newSavings,
+          bank_amount: 0
+        });
+
+        commit('SET_SAVINGS', newSavings);
+        commit('SET_BANK', 0);
       } catch (error) {
         console.error('Failed to deposit:', error)
         throw error // or handle it differently if needed
       }
     },
-    async fetchBank({ commit }) {
+    async fetchBank({ commit, state }) {
       try {
-        const { data } = await axios.get('/auth/get_bank/')
+        if (!state.user?.uid) return;
+        const userRef = doc(db, 'users', state.user.uid);
+        const userSnap = await getDoc(userRef);
 
-        commit('SET_BANK', data)
+        if (userSnap.exists()) {
+          commit('SET_BANK', userSnap.data().bank_amount || 0);
+        }
       } catch (error) {
         console.error('Failed to fetch bank:', error)
         throw error
       }
     },
-    async update_bank({ commit }, tip) {
+    async update_bank({ commit, state }, tip) {
       try {
-        const { data } = await axios.post('/auth/update_bank/', {
-          amount: tip
-        })
+        if (!state.user?.uid) return;
 
-        commit('SET_BANK', data)
+        const currentBank = state.user.bank_amount || 0;
+        const newBank = currentBank + tip;
+
+        const userRef = doc(db, 'users', state.user.uid);
+        await updateDoc(userRef, {
+          bank_amount: newBank
+        });
+
+        commit('SET_BANK', newBank);
       } catch (error) {
         console.error('Failed to withdraw:', error)
         throw error // or handle it differently if needed
       }
     },
-    async start_session({ commit }, sessionData) {
+    async start_session({ commit, state }) {
       try {
-        const { data } = await axios.post('/order/start_session/', sessionData)
+        const uid = state.user?.uid;
+        if (!uid) throw new Error("User not authenticated");
 
-        commit('SET_SESSION', data)
+        const sessionData = {
+          user_id: uid,
+          status: 'active',
+          started_at: serverTimestamp(),
+          ended_at: null
+        };
+
+        const sessionsRef = collection(db, 'sessions');
+        const docRef = await addDoc(sessionsRef, sessionData);
+
+        commit('SET_SESSION', {
+          session_id: docRef.id,
+          status: 'active',
+          started_at: new Date().toISOString(),
+          ended_at: null
+        });
       } catch (error) {
         console.error('Failed to start session:', error)
         throw error
       }
     },
-    async end_session({ commit }) {
+    async end_session({ commit, state }) {
       try {
-        const { data } = await axios.post('/order/end_session/')
+        const sessionId = state.session?.session_id;
+        if (!sessionId) throw new Error("No active session");
 
-        // update current sessions status and ended_at using the values from the response
-        commit('SET_SESSION', data)
+        const sessionRef = doc(db, 'sessions', sessionId);
+        await updateDoc(sessionRef, {
+          status: 'ended',
+          ended_at: serverTimestamp()
+        });
+
+        commit('SET_SESSION', {
+          ...state.session,
+          status: 'ended',
+          ended_at: new Date().toISOString()
+        });
       } catch (error) {
         console.error('Failed to end session:', error)
         throw error

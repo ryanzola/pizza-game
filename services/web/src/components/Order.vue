@@ -17,9 +17,11 @@
 
       <div class="flex flex-col pr-8">
         <div class="flex justify-between items-start mb-1">
-          <p class="font-bold text-lg text-white leading-tight">{{ order.address_name }}</p>
+          <p class="font-bold text-lg text-white leading-tight capitalize">
+            {{ order.address ? `${order.address.number} ${order.address.street}` : order.address_name }}
+          </p>
         </div>
-        <p class="text-sm text-gray-400 capitalize">{{ order.town }}</p>
+        <p class="text-sm text-gray-400 capitalize">{{ order.address ? order.address.town : order.town }}</p>
       </div>
       
       <div class="border-t border-gray-800 pt-3 flex justify-between items-center mt-1">
@@ -76,7 +78,16 @@ export default {
       return false;
     },
     formattedDate() {
-      const date = new Date(this.order.date_placed);
+      let date;
+      const dp = this.order.date_placed;
+      if (dp && typeof dp.toDate === 'function') {
+        date = dp.toDate();
+      } else if (dp && dp.seconds) {
+        date = new Date(dp.seconds * 1000);
+      } else {
+        date = new Date(dp || Date.now());
+      }
+      
       let hours = date.getHours();
       const minutes = date.getMinutes().toString().padStart(2, '0');
       const ampm = hours >= 12 ? 'PM' : 'AM';

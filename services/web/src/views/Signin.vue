@@ -33,7 +33,7 @@
 import { ref, watch, onMounted } from 'vue';
 import { useStore } from 'vuex';
 import { useRouter } from 'vue-router';
-import auth from '../firebase/init';
+import { auth } from '../firebase/init';
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 
 const store = useStore();
@@ -58,7 +58,6 @@ const signInWithGoogle = async () => {
   try {
     error.value = null; // Clear previous errors
     await signInWithPopup(auth, provider);
-    // Navigation is handled implicitly by the state watcher as the app updates the user profile 
   } catch (err) {
     console.error('Error during authentication:', err);
     error.value = err.message;

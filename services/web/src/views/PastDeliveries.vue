@@ -10,6 +10,8 @@
 
 <script>
 import Order from "../components/Order.vue";
+import { db } from '../firebase/init';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 export default {
   name: 'PastDeliveries',
@@ -22,8 +24,26 @@ export default {
     };
   },
   async mounted() {
-    const { data } = await this.$axios.get('/past_orders/')
-    this.orders = data
+    try {
+      const uid = this.$store.state.user?.uid;
+      if (!uid) return;
+
+      const q = query(
+        collection(db, 'orders'),
+        where('user_id', '==', uid),
+        where('status', '==', 'delivered')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const pastOrders = [];
+      querySnapshot.forEach((doc) => {
+        pastOrders.push({ id: doc.id, ...doc.data() });
+      });
+      
+      this.orders = pastOrders;
+    } catch (error) {
+      console.error(error)
+    }
   },
 }
 </script>

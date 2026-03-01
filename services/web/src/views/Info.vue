@@ -66,7 +66,8 @@
 
 <script>
 import Achievement from '../components/Achievement.vue'
-import axios from 'axios'
+import { db } from '../firebase/init';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 export default {
   name: 'Info',
@@ -75,6 +76,7 @@ export default {
   },
   data() {
     return {
+      orders: [],
       achievements: [
         {
           title: 'Rookie',
@@ -116,8 +118,22 @@ export default {
   },
   async mounted() {
     try {
-      const { data } = await axios.get('order/past_orders/')
-      this.orders = data
+      const uid = this.$store.state.user?.uid;
+      if (!uid) return;
+
+      const q = query(
+        collection(db, 'orders'),
+        where('user_id', '==', uid),
+        where('status', '==', 'delivered')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const pastOrders = [];
+      querySnapshot.forEach((doc) => {
+        pastOrders.push({ id: doc.id, ...doc.data() });
+      });
+      
+      this.orders = pastOrders;
     } catch (error) {
       console.error(error)
     }
