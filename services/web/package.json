@@ -17,7 +17,7 @@
     "@heroicons/vue": "^2.0.18",
     "@vue/cli-plugin-pwa": "^5.0.8",
     "axios": "^1.5.1",
-    "firebase": "^10.4.0",
+    "firebase": "^10.14.1",
     "vue": "^3.3.4",
     "vue-markdown-render": "^2.1.1",
     "vue-router": "^4.2.4",

@@ -1,5 +1,5 @@
 import { createApp } from 'vue'
-import axios from 'axios'
+
 
 import App from './App.vue'
 import router from './router'
@@ -16,45 +16,41 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-axios.defaults.baseURL = process.env.NODE_ENV === 'development'
-  ? 'http://localhost:8000/api/v1'
-  : import.meta.env.VITE_API_URL;
-
 import { onAuthStateChanged } from 'firebase/auth'
-import auth from './firebase/init'
+import { auth, db } from './firebase/init'
+import { doc, getDoc, setDoc } from 'firebase/firestore'
 
 let app;
-
-// Function to synchronously set Axios auth token on initial load from localStorage
-function initializeAxiosAuthentication() {
-  const vuexState = JSON.parse(localStorage.getItem('vuex'));
-  if (vuexState && vuexState.user) {
-    const token = localStorage.getItem('userToken');
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Token ${token}`;
-      store.commit('SET_USER_TOKEN', token);
-    }
-  }
-}
-
-initializeAxiosAuthentication();
 
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     try {
-      const token = await user.getIdToken();
-      const { data } = await axios.post('/auth/google_login/', { token: token });
-      store.commit('SET_USER', data.user);
-      store.commit('SET_USER_TOKEN', data.token);
-      localStorage.setItem('userToken', data.token);
+      const userDocRef = doc(db, 'users', user.uid);
+      const userDocSnap = await getDoc(userDocRef);
+
+      let userData;
+      if (userDocSnap.exists()) {
+        userData = userDocSnap.data();
+      } else {
+        // Create a new user profile document
+        userData = {
+          email: user.email,
+          name: user.displayName,
+          picture: user.photoURL,
+          bank_amount: 0,
+          savings_amount: 0,
+        };
+        await setDoc(userDocRef, userData);
+      }
+
+      // Add uid to the payload for easier reference
+      store.dispatch('fetchUser', { ...userData, uid: user.uid });
     } catch (e) {
-      console.error("Error exchanging Firebase token for backend token:", e);
+      console.error("Error fetching or creating user profile:", e);
       store.dispatch('logOut');
     }
   } else {
-    store.commit('SET_USER', null);
-    store.commit('SET_USER_TOKEN', null);
-    localStorage.removeItem('userToken');
+    store.dispatch('fetchUser', null);
   }
 
   if (!app) {

@@ -7,16 +7,29 @@
       <img v-if="isNearRestaurantDepot" src="../assets/depot.png" alt="the pizzeria storefront" class="absolute object-cover w-full h-full opacity-80">
       <img v-else src="../assets/pizzeria.jpg" alt="the pizzeria storefront" class="absolute object-cover w-full h-full opacity-80">
 
-      <div class="absolute bottom-4 left-4 right-4 z-20" v-if="!isNearRestaurantDepot">
-        <h2 class="text-white text-3xl font-bold tracking-tight shadow-sm mb-1">Ryan's Pizzeria</h2>
-        <div class="flex items-center gap-2">
-          <span class="bg-blue-500/90 text-white text-xs font-bold px-2 py-1 rounded-md backdrop-blur-md">
-            {{ isNearPizzeria ? 'At Store' : 'Out for Delivery' }}
-          </span>
-          <span class="text-gray-300 text-sm font-medium drop-shadow-md">
-            {{ Math.floor(waitTime / 1000 / 60) }} min wait
-          </span>
+      <div class="absolute bottom-4 left-4 right-4 z-20 flex justify-between items-end" v-if="!isNearRestaurantDepot">
+        <div>
+          <h2 class="text-white text-3xl font-bold tracking-tight shadow-sm mb-1">Ryan's Pizzeria</h2>
+          <div v-if="hasActiveSession" class="flex items-center gap-2 mt-1">
+            <span class="bg-blue-500/90 text-white text-xs font-bold px-2 py-1 rounded-md backdrop-blur-md">
+              {{ isNearPizzeria ? 'At Store' : 'Out for Delivery' }}
+            </span>
+            <span class="text-gray-300 text-sm font-medium drop-shadow-md">
+              {{ Math.floor(waitTime / 1000 / 60) }} min wait
+            </span>
+          </div>
         </div>
+        
+        <!-- Session Controls -->
+        <button v-if="!hasActiveSession" @click="start_session"
+                class="bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded-full text-xs font-bold shadow-md backdrop-blur-md transition-colors flex items-center gap-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
+          Start Session
+        </button>
+        <button v-else @click="end_session"
+                class="bg-red-500/80 hover:bg-red-500 text-white px-3 py-1.5 rounded-full text-xs font-bold shadow-md backdrop-blur-md transition-colors border border-red-400/30 flex items-center gap-1.5">
+          End Session
+        </button>
       </div>
     </div>
 
@@ -53,13 +66,6 @@
     <!-- Changed to sticky mt-auto to naturally affix to the bottom of the flex container, rather than overlapping fixed elements -->
     <div class="sticky mt-auto bottom-0 left-0 right-0 z-40 bg-[#121212]/90 backdrop-blur-xl border-t border-gray-800 pb-safe pt-3 px-4 rounded-t-3xl">
       <div class="max-w-md mx-auto flex flex-col gap-2 pb-4">
-        
-        <button v-if="!hasActiveSession" class="action-btn bg-green-500 hover:bg-green-600 active:bg-green-700 text-white shadow-[0_0_15px_rgba(34,197,94,0.3)]" @click="start_session">
-          <span class="font-bold text-lg">Start Session</span>
-        </button>
-        <button v-else class="action-btn bg-[#2c2c2e] hover:bg-[#3a3a3c] active:bg-gray-700 border border-gray-700 text-white" @click="end_session">
-          <span class="font-bold text-lg">End Session</span>
-        </button>
 
         <button v-if="isNearRestaurantDepot" class="action-btn bg-blue-500 text-white shadow-[0_0_15px_rgba(59,130,246,0.3)]" @click="() => {}">
           <span class="font-bold">Restock Pizzeria</span>
@@ -95,6 +101,11 @@ import DebugLocation from "../components/DebugLocation.vue";
 import Order from "../components/Order.vue";
 import { mapState, mapGetters, mapActions } from 'vuex'
 import { ChevronDoubleRightIcon } from '@heroicons/vue/24/solid'
+import { getFunctions, httpsCallable } from "firebase/functions";
+import { app } from '../firebase/init'; // Ensure we have the initialized Firebase app
+
+// Get the initialized Cloud Functions instance (explicitly targeting us-central1)
+const functions = getFunctions(app, 'us-central1');
 
 export default {
   name: "Home",
@@ -128,35 +139,19 @@ export default {
   },
   async mounted() {
     try {
-      await this.fetchOrders();
-      // Poll every 15 seconds for new orders after the latest known timestamp
-      this.pollId = setInterval(() => {
-        const latest = this.latestOrderTimestampISO();
-        this.fetchOrders({ since: latest }).catch(() => {});
-      }, 15000);
+      this.listenToQueuedOrders();
     } catch (error) {
-      console.error('Error fetching orders:', error);
+      console.error('Error starting order listener:', error);
     } finally {
       this.loading = false;
     }
   },
   unmounted() {
-    if (this.pollId) {
-      clearInterval(this.pollId);
-      this.pollId = null;
-    }
+    this.stopListeningToQueuedOrders();
   },
   methods: {
-    ...mapActions('orders', ['fetchNewOrder', 'fetchOrders', 'attachUserToOrders', 'clearQueuedOrders']),
+    ...mapActions('orders', ['listenToQueuedOrders', 'stopListeningToQueuedOrders', 'attachUserToOrders']),
     ...mapActions(['start_session', 'end_session']),
-    latestOrderTimestampISO() {
-      if (!this.orders || this.orders.length === 0) return undefined;
-      const latestMs = this.orders.reduce((max, o) => {
-        const t = new Date(o.date_placed).getTime();
-        return Number.isFinite(t) && t > max ? t : max;
-      }, 0);
-      return latestMs ? new Date(latestMs).toISOString() : undefined;
-    },
     toggleOrderSelection(id) {
       const index = this.selected.findIndex(selectedId => selectedId === id);
       if (index > -1) {
@@ -179,15 +174,19 @@ export default {
         this.loading = false;
       }
     },
-    getNewOrder() {
+    async getNewOrder() {
+      if (this.loading) return;
       this.loading = true;
-
-      this.fetchNewOrder().then(() => {
+      try {
+        const generateOrderFunction = httpsCallable(functions, 'generateOrder');
+        const result = await generateOrderFunction();
+        console.log('Successfully generated order via Cloud Function:', result.data);
+      } catch (error) {
+        console.error('Error invoking generateOrder function:', error);
+        alert('Failed to generate order: ' + error.message);
+      } finally {
         this.loading = false;
-      })
-      .finally(() => {
-        this.loading = false;
-      });
+      }
     }
   }
 };

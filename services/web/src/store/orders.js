@@ -1,7 +1,10 @@
-import axios from 'axios';
 import { getDistanceFromLatLonInM } from './storeUtils';
+import { db } from '../firebase/init';
+import { collection, doc, query, where, getDocs, updateDoc, writeBatch, onSnapshot, serverTimestamp } from 'firebase/firestore';
 
 const baseWaitTime = 30 * 60 * 1000; // 30 minutes in milliseconds
+
+let queuedOrdersUnsubscribe = null;
 
 const state = {
   orders: [],
@@ -16,6 +19,10 @@ const mutations = {
     if (order) {
       order.status = status;
     }
+    const selectedOrder = state.selected_orders.find(o => o.id === orderId);
+    if (selectedOrder) {
+      selectedOrder.status = status;
+    }
   },
   ADD_ORDER(state, order) {
     state.orders.push(order);
@@ -27,10 +34,10 @@ const mutations = {
     state.selected_orders.push(orderId);
   },
   SET_ORDERS(state, orders = []) {
-    state.orders = state.orders.concat(orders);
+    state.orders = orders; // Overwrite for snapshot listener
   },
   SET_SELECTED_ORDERS(state, orders) {
-    state.selected_orders = state.selected_orders.concat(orders);
+    state.selected_orders = orders;
   },
   UPDATE_ORDERS(state, updatedOrders) {
     updatedOrders.forEach(orderId => {
@@ -65,7 +72,16 @@ const actions = {
 
     filteredOrders.forEach(async order => {
       let newStatus = null;
-      const timeSinceOrderPlaced = Date.now() - new Date(order.date_placed).getTime();
+      // Ensure date_placed is correctly parsed
+      let orderTimeMs;
+      if (order.date_placed && typeof order.date_placed.toMillis === 'function') {
+        orderTimeMs = order.date_placed.toMillis();
+      } else if (order.date_placed && order.date_placed.seconds) {
+        orderTimeMs = order.date_placed.seconds * 1000;
+      } else {
+        orderTimeMs = new Date(order.date_placed).getTime() || Date.now();
+      }
+      const timeSinceOrderPlaced = Date.now() - orderTimeMs;
 
       if (order.latitude && order.longitude) {
         const distanceToOrder = getDistanceFromLatLonInM(
@@ -88,80 +104,90 @@ const actions = {
         state.isUpdating = true;
 
         try {
-          await axios.post(`order/update_order_status/${order.id}/`, {
-            status: newStatus
-          });
+          const orderRef = doc(db, 'orders', order.id);
+
+          const updateData = { status: newStatus };
+          if (newStatus === 'delivered') updateData.date_delivered = serverTimestamp();
+
+          await updateDoc(orderRef, updateData);
 
           commit('UPDATE_ORDER_STATUS', { orderId: order.id, status: newStatus });
 
         } catch (error) {
           console.error('Failed to update order status:', error);
-          throw error; // or handle it differently if needed
+          throw error;
         } finally {
           state.isUpdating = false
         }
       }
     });
   },
-  async fetchNewOrder({ commit }) {
-    try {
-      const { data } = await axios.get('order/get_order/')
+  listenToQueuedOrders({ commit }) {
+    if (queuedOrdersUnsubscribe) return; // Already listening
 
-      console.log('New order:', data)
+    const q = query(collection(db, 'orders'), where('status', '==', 'queued'), where('user_id', '==', null));
 
-      commit('SET_ORDERS', [data])
-    } catch (error) {
-      console.error('Failed to fetch new order:', error)
-      throw error
-    }
-  },
-  async fetchOrders({ commit, state }, { since } = {}) {
-    try {
-      const params = {}
-      if (since) params.since = since
-      const { data } = await axios.get('order/get_orders/', { params })
-
-      // check for duplicate orders by id
-      const newOrders = data.orders.filter(o => !state.orders.some(so => so.id === o.id))
-
-      commit('SET_ORDERS', newOrders)
-    } catch (error) {
-      console.error('Failed to fetch orders:', error)
-      throw error // or handle it differently if needed
-    }
-  },
-  async attachUserToOrders({ commit }, orderIds) {
-    try {
-      const response = await axios.post('order/attach_user_to_orders/', {
-        order_ids: orderIds
+    queuedOrdersUnsubscribe = onSnapshot(q, (snapshot) => {
+      const newOrders = [];
+      snapshot.forEach((doc) => {
+        newOrders.push({ id: doc.id, ...doc.data() });
       });
-      commit('UPDATE_ORDERS', response.data.updated_orders);
-      return response.data;
+      commit('SET_ORDERS', newOrders);
+    }, (error) => {
+      console.error("Error listening to queued orders:", error);
+    });
+  },
+  stopListeningToQueuedOrders() {
+    if (queuedOrdersUnsubscribe) {
+      queuedOrdersUnsubscribe();
+      queuedOrdersUnsubscribe = null;
+    }
+  },
+  async attachUserToOrders({ commit, rootState }, orderIds) {
+    try {
+      const uid = rootState.user?.uid;
+      if (!uid) throw new Error("User not authenticated");
+
+      const batch = writeBatch(db);
+
+      orderIds.forEach(id => {
+        const orderRef = doc(db, 'orders', id);
+        batch.update(orderRef, {
+          status: 'en_route',
+          user_id: uid
+        });
+      });
+
+      await batch.commit();
+
+      commit('UPDATE_ORDERS', orderIds);
+      return { updated_orders: orderIds };
     } catch (error) {
       console.error('Error attaching user to orders:', error);
       throw error;
     }
   },
-  async fetchSelectedOrders({ commit }) {
+  async fetchSelectedOrders({ commit, rootState }) {
     try {
-      const { data } = await axios.get('order/get_user_orders/')
+      const uid = rootState.user?.uid;
+      if (!uid) return;
 
-      // check for duplicate orders by id
-      const newOrders = data.orders.filter(o => !state.selected_orders.some(so => so.id === o.id))
+      const q = query(
+        collection(db, 'orders'),
+        where('user_id', '==', uid),
+        where('status', 'in', ['pending', 'en_route'])
+      );
 
-      commit('SET_SELECTED_ORDERS', newOrders)
+      const snapshot = await getDocs(q);
+      const orders = [];
+      snapshot.forEach(doc => {
+        orders.push({ id: doc.id, ...doc.data() });
+      });
+
+      commit('SET_SELECTED_ORDERS', orders);
     } catch (error) {
       console.error('Failed to fetch selected orders:', error)
       throw error
-    }
-  },
-  async clearQueuedOrders({ commit }) {
-    try {
-      await axios.post('order/clear_queued_orders/');
-      commit('REMOVE_QUEUED_ORDERS');
-    } catch (error) {
-      console.error('Error clearing queued orders:', error);
-      throw error;
     }
   }
 }
