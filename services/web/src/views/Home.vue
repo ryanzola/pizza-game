@@ -4,7 +4,8 @@
       <p class="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded-full z-20 backdrop-blur-md">v{{ version }}</p>
       
       <div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10 transition-opacity"></div>
-      <img v-if="isNearRestaurantDepot" src="../assets/depot.png" alt="the pizzeria storefront" class="absolute object-cover w-full h-full opacity-80">
+      <img v-if="isNearBakery" src="../assets/bakery.png" alt="the bakery" class="absolute object-cover w-full h-full opacity-80">
+      <img v-else-if="isNearRestaurantDepot" src="../assets/depot.png" alt="the pizzeria storefront" class="absolute object-cover w-full h-full opacity-80">
       <img v-else src="../assets/pizzeria.png" alt="the pizzeria storefront" class="absolute object-cover w-full h-full opacity-80">
 
       <div class="absolute bottom-4 left-4 right-4 z-20 flex justify-between items-end" v-if="!isNearRestaurantDepot">
@@ -126,7 +127,7 @@ export default {
     ...mapState(['session', 'version']),
     ...mapState('orders', ['waitTime', 'selected_orders']),
     ...mapState('location', ['locationAvailable']),
-    ...mapGetters('location', ['isNearPizzeria', 'isNearRestaurantDepot']),
+    ...mapGetters('location', ['isNearPizzeria', 'isNearRestaurantDepot', 'isNearBakery']),
     ...mapGetters('orders', ['orders']),
     pendingOrders() {
       // make sure order user_id is null and order.status is not delivered

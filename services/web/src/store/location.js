@@ -13,6 +13,10 @@ const state = {
     latitude: 40.86082582150665,
     longitude: -74.07959384969016,
   },
+  bakeryCoords: {
+    latitude: 40.87485155936898,
+    longitude: -74.10014034710848
+  },
   player: {
     latitude: 0.0,
     longitude: 0.0,
@@ -111,6 +115,18 @@ const getters = {
         state.player.longitude,
         state.bankCoords.latitude,
         state.bankCoords.longitude
+      );
+      return distance <= state.thresholdDistance;
+    }
+    return false;
+  },
+  isNearBakery(state) {
+    if (state.player.latitude && state.player.longitude) {
+      const distance = getDistanceFromLatLonInM(
+        state.player.latitude,
+        state.player.longitude,
+        state.bakeryCoords.latitude,
+        state.bakeryCoords.longitude
       );
       return distance <= state.thresholdDistance;
     }
