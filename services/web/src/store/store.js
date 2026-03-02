@@ -29,7 +29,7 @@ const store = createStore({
         started_at: null,
         ended_at: null
       },
-      version: '1.26.02.22'
+      version: '1.26.03.01'
     }
   },
   getters: {

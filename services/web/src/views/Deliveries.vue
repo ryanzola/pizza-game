@@ -49,27 +49,70 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useStore } from 'vuex';
 import Order from "../components/Order.vue";
+import { db } from '../firebase/init';
+import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 
 const store = useStore();
 const showActive = ref(true);
 
 const selectedOrders = computed(() => store.state.orders.selected_orders || []);
+const completedOrdersList = ref([]);
+let unsubscribe = null;
 
 const activeOrders = computed(() => {
   return selectedOrders.value.filter(order => order.status !== 'delivered' && order.status !== 'cancelled');
 });
 
 const completedOrders = computed(() => {
-  return selectedOrders.value
-    .filter(order => order.status === 'delivered' || order.status === 'cancelled')
-    .sort((a, b) => new Date(b.date_placed) - new Date(a.date_placed)); // Show newest completed first
+  return completedOrdersList.value;
 });
+
+watch(() => store.state.user, (user) => {
+  if (user && user.uid) {
+    fetchCompletedOrders(user.uid);
+  } else {
+    completedOrdersList.value = [];
+    if (unsubscribe) {
+      unsubscribe();
+      unsubscribe = null;
+    }
+  }
+}, { immediate: true });
+
+function fetchCompletedOrders(uid) {
+  if (unsubscribe) {
+    unsubscribe();
+  }
+  
+  const q = query(
+    collection(db, 'orders'),
+    where('user_id', '==', uid),
+    where('status', '==', 'delivered'),
+    orderBy('date_delivered', 'desc')
+  );
+  
+  unsubscribe = onSnapshot(q, (snapshot) => {
+    const pastOrders = [];
+    snapshot.forEach((doc) => {
+      pastOrders.push({ id: doc.id, ...doc.data() });
+    });
+    completedOrdersList.value = pastOrders;
+  }, (error) => {
+    console.error("Error fetching past deliveries:", error);
+  });
+}
 
 onMounted(() => {
   store.dispatch('orders/fetchSelectedOrders');
+});
+
+onUnmounted(() => {
+  if (unsubscribe) {
+    unsubscribe();
+  }
 });
 </script>
 

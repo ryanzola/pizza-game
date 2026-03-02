@@ -11,7 +11,7 @@
 <script>
 import Order from "../components/Order.vue";
 import { db } from '../firebase/init';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 
 export default {
   name: 'PastDeliveries',
@@ -20,31 +20,55 @@ export default {
   },
   data() {
     return {
-      orders: []
+      orders: [],
+      unsubscribe: null
     };
   },
-  async mounted() {
-    try {
-      const uid = this.$store.state.user?.uid;
-      if (!uid) return;
-
+  watch: {
+    '$store.state.user': {
+      immediate: true,
+      handler(user) {
+        if (user && user.uid) {
+          this.fetchOrders(user.uid);
+        } else {
+          this.orders = [];
+          if (this.unsubscribe) {
+            this.unsubscribe();
+            this.unsubscribe = null;
+          }
+        }
+      }
+    }
+  },
+  methods: {
+    fetchOrders(uid) {
+      if (this.unsubscribe) {
+        this.unsubscribe();
+      }
+      
       const q = query(
         collection(db, 'orders'),
         where('user_id', '==', uid),
-        where('status', '==', 'delivered')
+        where('status', '==', 'delivered'),
+        orderBy('date_delivered', 'desc')
       );
       
-      const querySnapshot = await getDocs(q);
-      const pastOrders = [];
-      querySnapshot.forEach((doc) => {
-        pastOrders.push({ id: doc.id, ...doc.data() });
+      this.unsubscribe = onSnapshot(q, (snapshot) => {
+        const pastOrders = [];
+        snapshot.forEach((doc) => {
+          pastOrders.push({ id: doc.id, ...doc.data() });
+        });
+        this.orders = pastOrders;
+      }, (error) => {
+        console.error("Error fetching past deliveries:", error);
       });
-      
-      this.orders = pastOrders;
-    } catch (error) {
-      console.error(error)
     }
   },
+  unmounted() {
+    if (this.unsubscribe) {
+      this.unsubscribe();
+    }
+  }
 }
 </script>
 

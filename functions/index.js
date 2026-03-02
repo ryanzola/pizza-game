@@ -1,11 +1,17 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const axios = require("axios");
-const { OpenAI } = require("openai");
+const { GoogleGenAI } = require("@google/genai");
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
+const { onCall } = require("firebase-functions/v2/https");
+const { defineSecret } = require("firebase-functions/params");
+
+const googleApiKey = defineSecret("GOOGLE_API_KEY");
+const geminiApiKey = defineSecret("GEMINI_API_KEY");
 
 // Import the parsed residential addresses
 const addressesData = require("./data/addresses.json");
+const menuData = require("./data/menu.json");
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -14,7 +20,8 @@ const db = admin.firestore();
 // We expect OPENAI_API_KEY and GOOGLE_API_KEY to be set in Firebase functions config
 // e.g., firebase functions:secrets:set OPENAI_API_KEY
 // Assistant setup variables
-const ASSISTANT_ID = process.env.OPENAI_ASSISTANT_ID;
+// Assistant setup variables
+// Secrets are injected via defineSecret and accessed via .value() inside the function.
 
 // Helper to get random item from array
 const getRandomElement = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -39,7 +46,7 @@ const getRandomAddress = () => {
 };
 
 const getLatLon = async (addressStr) => {
-  const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+  const GOOGLE_API_KEY = googleApiKey.value();
   if (!GOOGLE_API_KEY) {
     console.warn("Missing GOOGLE_API_KEY, skipping geocoding for now.");
     return null;
@@ -79,153 +86,145 @@ const estimatedOrderCost = (familySize) => {
   };
 };
 
-const getRandomOrderFromOpenAI = async (familySize) => {
+const getRandomOrderFromGemini = async (familySize) => {
   try {
-    // Wait for the assistant ID to ensure we are using the correct one
-    if (!ASSISTANT_ID) {
-      console.warn("No Assistant ID configured, falling back to a dummy order.");
+    const apiKey = geminiApiKey.value();
+    if (!apiKey) {
+      console.warn("No Gemini API Key configured, falling back to a dummy order.");
       return null;
     }
 
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY || functions.config().openai?.key,
-    });
+    const ai = new GoogleGenAI({ apiKey: apiKey });
 
-    const thread = await openai.beta.threads.create();
+    const prompt = `
+    You are an order placement bot for a pizzeria.
+    Generate a realistic pizza order for a family of ${familySize} people.
+    Choose random, realistic combinations of food items strictly from the following menu data. Do not make up items or prices.
+    
+    Menu: ${JSON.stringify(menuData)}
+    
+    Return the order strictly as a valid JSON object matching this exact format, with no markdown formatting or extra text:
+    {
+      "order_items": ["2 14\\" Cheese Pizzas", "1 Garlic Knots", "1 2 Liter Soda Coke"]
+    }
+    `;
 
-    await openai.beta.threads.messages.create(thread.id, {
-      role: "user",
-      content: `Please create an order for a family of ${familySize} people.`
-    });
-
-    const run = await openai.beta.threads.runs.create(thread.id, {
-      assistant_id: ASSISTANT_ID
-    });
-
-    // Poll for completion
-    let runStatus;
-    let attempts = 0;
-    while (attempts < 30) {
-      runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
-      if (runStatus.status === 'completed' || runStatus.status === 'failed') {
-        break;
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
       }
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      attempts++;
+    });
+
+    if (response.text) {
+      return JSON.parse(response.text);
     }
 
-    if (runStatus.status === 'completed') {
-      const messages = await openai.beta.threads.messages.list(thread.id);
-      const assistantMessages = messages.data.filter(msg => msg.role === 'assistant');
-      if (assistantMessages.length > 0) {
-        const responseText = assistantMessages[0].content[0].text.value;
-        return JSON.parse(responseText);
-      }
-    }
     return null;
   } catch (error) {
-    console.error("OpenAI generation failed:", error);
+    console.error("Gemini generation failed:", error);
     return null;
   }
 };
 
-exports.generateOrder = functions.https.onCall(async (request) => {
-  console.log("Context auth:", request.auth);
-  // Ensure the user is authenticated via Firebase Auth
-  if (!request.auth) {
-    throw new functions.https.HttpsError(
-      'unauthenticated',
-      'You must be logged in to generate orders.'
-    );
-  }
+const functionsV1 = require("firebase-functions/v1");
 
-  try {
-    const addressObj = getRandomAddress();
-    const coords = await getLatLon(addressObj.fullAddress);
-
-    // Provide a valid fallback if geocoding fails to prevent breaking the game
-    const lat = coords ? coords.lat : 40.8262;
-    const lon = coords ? coords.lon : -74.0660;
-
-    const familySize = Math.floor(Math.random() * 6) + 1;
-    let orderDetails = await getRandomOrderFromOpenAI(familySize);
-
-    if (!orderDetails) {
-      // Fallback order if OpenAI fails
-      orderDetails = {
-        order_items: [
-          `${familySize} large cheese pizza${familySize > 1 ? 's' : ''}`,
-          "1 garlic knots"
-        ]
-      };
+exports.generateOrder = onCall(
+  { secrets: [geminiApiKey, googleApiKey] },
+  async (request) => {
+    // Ensure the user is authenticated via Firebase Auth
+    if (!request.auth) {
+      throw new Error('unauthenticated: You must be logged in to generate orders.');
     }
 
-    const { total, tip } = estimatedOrderCost(familySize);
+    try {
+      const addressObj = getRandomAddress();
+      const coords = await getLatLon(addressObj.fullAddress);
 
-    // Roll for VIP order (15% chance)
-    const isVip = Math.random() < 0.15;
-    const finalTip = isVip ? parseFloat((tip * 3).toFixed(2)) : tip;
+      // Provide a valid fallback if geocoding fails to prevent breaking the game
+      const lat = coords ? coords.lat : 40.8262;
+      const lon = coords ? coords.lon : -74.0660;
 
-    const newOrder = {
-      status: 'queued',
-      is_vip: isVip,
-      date_placed: admin.firestore.FieldValue.serverTimestamp(),
-      date_delivered: null,
-      user_id: null,
-      address: {
-        street: addressObj.street,
-        town: addressObj.town.replace('_', ' '),
-        number: addressObj.number.toString(),
-        full_address: addressObj.fullAddress
-      },
-      items: orderDetails.order_items,
-      total_cost: total,
-      tip: finalTip,
-      latitude: lat,
-      longitude: lon
-    };
+      const familySize = Math.floor(Math.random() * 6) + 1;
+      let orderDetails = await getRandomOrderFromGemini(familySize);
 
-    // Save strictly to Firestore bypassing the client
-    const docRef = await db.collection("orders").add(newOrder);
-
-    // Send Push Notification for VIP Orders
-    if (isVip) {
-      try {
-        const tokensSnapshot = await db.collectionGroup('tokens').get();
-        const tokens = tokensSnapshot.docs.map(d => d.data().token);
-
-        if (tokens.length > 0) {
-          const message = {
-            notification: {
-              title: '💎 VIP Order Alert!',
-              body: `A massive VIP pizza order was just placed nearby. Big tip guaranteed!`
-            },
-            tokens: tokens
-          };
-          // Try both methods for SDK version compatibility
-          if (admin.messaging().sendEachForMulticast) {
-            await admin.messaging().sendEachForMulticast(message);
-          } else {
-            await admin.messaging().sendMulticast(message);
-          }
-          console.log(`Sent VIP push notification to ${tokens.length} devices.`);
-        }
-      } catch (pushError) {
-        console.error('Error sending VIP push notification:', pushError);
+      if (!orderDetails) {
+        // Fallback order if Gemini fails
+        orderDetails = {
+          order_items: [
+            `${familySize} large cheese pizza${familySize > 1 ? 's' : ''}`,
+            "1 garlic knots"
+          ]
+        };
       }
+
+      const { total, tip } = estimatedOrderCost(familySize);
+
+      // Roll for VIP order (15% chance)
+      const isVip = Math.random() < 0.15;
+      const finalTip = isVip ? parseFloat((tip * 3).toFixed(2)) : tip;
+
+      const newOrder = {
+        status: 'queued',
+        is_vip: isVip,
+        date_placed: admin.firestore.FieldValue.serverTimestamp(),
+        date_delivered: null,
+        user_id: null,
+        address: {
+          street: addressObj.street,
+          town: addressObj.town.replace('_', ' '),
+          number: addressObj.number.toString(),
+          full_address: addressObj.fullAddress
+        },
+        items: orderDetails.order_items,
+        total_cost: total,
+        tip: finalTip,
+        latitude: lat,
+        longitude: lon
+      };
+
+      // Save strictly to Firestore bypassing the client
+      const docRef = await db.collection("orders").add(newOrder);
+
+      // Send Push Notification for VIP Orders
+      if (isVip) {
+        try {
+          const tokensSnapshot = await db.collectionGroup('tokens').get();
+          const tokens = tokensSnapshot.docs.map(d => d.data().token);
+
+          if (tokens.length > 0) {
+            const message = {
+              notification: {
+                title: '💎 VIP Order Alert!',
+                body: `A massive VIP pizza order was just placed nearby. Big tip guaranteed!`
+              },
+              tokens: tokens
+            };
+            // Try both methods for SDK version compatibility
+            if (admin.messaging().sendEachForMulticast) {
+              await admin.messaging().sendEachForMulticast(message);
+            } else {
+              await admin.messaging().sendMulticast(message);
+            }
+            console.log(`Sent VIP push notification to ${tokens.length} devices.`);
+          }
+        } catch (pushError) {
+          console.error('Error sending VIP push notification:', pushError);
+        }
+      }
+
+      return {
+        success: true,
+        orderId: docRef.id,
+        order: newOrder
+      };
+
+    } catch (error) {
+      console.error("Error generating order:", error);
+      throw new functions.https.HttpsError('internal', 'Failed to generate order.');
     }
-
-    return {
-      success: true,
-      orderId: docRef.id,
-      order: newOrder
-    };
-
-  } catch (error) {
-    console.error("Error generating order:", error);
-    throw new functions.https.HttpsError('internal', 'Failed to generate order.');
-  }
-});
+  });
 
 // Background function to process delivered orders and award achievements
 exports.processOrderAchievements = onDocumentUpdated("orders/{orderId}", async (event) => {
@@ -235,16 +234,28 @@ exports.processOrderAchievements = onDocumentUpdated("orders/{orderId}", async (
   // Only process when an order transitions to 'delivered' status
   if (orderBefore.status !== 'delivered' && orderAfter.status === 'delivered') {
     const userId = orderAfter.user_id;
-    if (!userId) return;
+    console.log(`Processing delivered order ${event.data.after.id} for user ${userId}`);
+    if (!userId) {
+      console.warn("No user_id found on the delivered order, skipping achievements and tips");
+      return;
+    }
 
     try {
       // We process achievements and stats in a transaction to ensure consistency
       await db.runTransaction(async (transaction) => {
-        // 1. Get User's Lifetime Stats
+        // 1. Define Refs & Perform All Reads First
         const statsRef = db.collection('users').doc(userId).collection('stats').doc('lifetime');
-        const statsDoc = await transaction.get(statsRef);
+        const userRef = db.collection('users').doc(userId);
+        const pizzeriaRef = db.collection('pizzeria').doc('finances');
+        const achievementsRef = db.collection('users').doc(userId).collection('achievements');
 
-        // Initialize default stats if they don't exist yet
+        const [statsDoc, pizzeriaDoc, unlockedDocs] = await Promise.all([
+          transaction.get(statsRef),
+          transaction.get(pizzeriaRef),
+          transaction.get(achievementsRef)
+        ]);
+
+        // 2. Process User's Lifetime Stats
         let stats = statsDoc.exists ? statsDoc.data() : {
           total_deliveries: 0,
           total_distance_km: 0,
@@ -252,20 +263,17 @@ exports.processOrderAchievements = onDocumentUpdated("orders/{orderId}", async (
           total_tips: 0
         };
 
-        // 2. Increment Stats
         stats.total_deliveries += 1;
         stats.total_tips += (orderAfter.tip || 0);
 
         // Calculate distance
         if (orderAfter.latitude && orderAfter.longitude) {
-          // Pizzeria location approx
           const pixLat = 40.8262;
           const pixLon = -74.0660;
 
           const latDiff = pixLat - orderAfter.latitude;
           const lonDiff = pixLon - orderAfter.longitude;
 
-          // Approx conversion: 1 degree ~ 111 km
           const distKm = Math.sqrt(Math.pow(latDiff, 2) + Math.pow(lonDiff, 2)) * 111;
           stats.total_distance_km += distKm;
         }
@@ -278,16 +286,12 @@ exports.processOrderAchievements = onDocumentUpdated("orders/{orderId}", async (
         // 3. Write Stats Back & Update User Bank
         transaction.set(statsRef, stats, { merge: true });
 
-        const userRef = db.collection('users').doc(userId);
         transaction.set(userRef, {
           bank_amount: admin.firestore.FieldValue.increment(orderAfter.tip || 0)
         }, { merge: true });
 
         // Update Pizzeria Finances
-        const pizzeriaRef = db.collection('pizzeria').doc('finances');
-        const pizzeriaDoc = await transaction.get(pizzeriaRef);
         const revenue = orderAfter.total_cost || 0;
-
         if (!pizzeriaDoc.exists) {
           transaction.set(pizzeriaRef, {
             bank_balance: 1000 + revenue
@@ -299,10 +303,7 @@ exports.processOrderAchievements = onDocumentUpdated("orders/{orderId}", async (
         }
 
         // 4. Check & Award Achievements
-        const achievementsRef = db.collection('users').doc(userId).collection('achievements');
-        const unlockedDocs = await transaction.get(achievementsRef);
         const unlockedIds = unlockedDocs.docs.map(d => d.id);
-
         let newAchievements = [];
 
         // Check: First Slice
