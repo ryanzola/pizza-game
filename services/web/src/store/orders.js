@@ -160,6 +160,14 @@ const actions = {
 
       await batch.commit();
 
+      // Optimistically populate selected_orders with full order data
+      // so the Deliveries page has data immediately on navigation
+      const selectedOrderData = orderIds.map(id => {
+        const order = state.orders.find(o => o.id === id);
+        return order ? { ...order, status: 'en_route', user_id: uid } : null;
+      }).filter(Boolean);
+
+      commit('SET_SELECTED_ORDERS', selectedOrderData);
       commit('UPDATE_ORDERS', orderIds);
       return { updated_orders: orderIds };
     } catch (error) {
@@ -188,6 +196,27 @@ const actions = {
     } catch (error) {
       console.error('Failed to fetch selected orders:', error)
       throw error
+    }
+  },
+  async clearUnselectedOrders({ state }) {
+    try {
+      // Find all queued orders still in the local store (not selected by the user)
+      const q = query(
+        collection(db, 'orders'),
+        where('status', '==', 'queued'),
+        where('user_id', '==', null)
+      );
+
+      const snapshot = await getDocs(q);
+      if (snapshot.empty) return;
+
+      const batch = writeBatch(db);
+      snapshot.forEach((docSnap) => {
+        batch.delete(docSnap.ref);
+      });
+      await batch.commit();
+    } catch (error) {
+      console.error('Failed to clear unselected orders:', error);
     }
   }
 }

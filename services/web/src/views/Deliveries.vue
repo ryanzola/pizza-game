@@ -25,7 +25,7 @@
     <!-- Scrollable Orders List Container -->
     <div class="flex-1 overflow-y-auto px-4 pb-6 pt-2">
       <ul v-if="showActive" class="orders-list flex flex-col gap-3">
-        <Order v-for="order in activeOrders" :key="order.id" :order="order" />
+        <Order v-for="order in activeOrders" :key="order.id" :order="order" :clickable="true" />
         <div v-if="activeOrders.length === 0" class="flex flex-col items-center justify-center py-12 px-4 text-center bg-[#1c1c1e] rounded-2xl border border-gray-800 shadow-sm">
           <div class="w-16 h-16 bg-[#2c2c2e] rounded-full flex items-center justify-center mb-3">
              <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
@@ -35,7 +35,7 @@
         </div>
       </ul>
       <ul v-else class="orders-list flex flex-col gap-3">
-        <Order v-for="order in completedOrders" :key="order.id" :order="order" />
+        <Order v-for="order in completedOrders" :key="order.id" :order="order" :clickable="true" />
         <div v-if="completedOrders.length === 0" class="flex flex-col items-center justify-center py-12 px-4 text-center bg-[#1c1c1e] rounded-2xl border border-gray-800 shadow-sm">
           <div class="w-16 h-16 bg-[#2c2c2e] rounded-full flex items-center justify-center mb-3">
              <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>

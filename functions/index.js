@@ -226,6 +226,113 @@ exports.generateOrder = onCall(
     }
   });
 
+// Batch order generation: creates 5-10 orders at once when the driver arrives at the pizzeria
+exports.generateOrderBatch = onCall(
+  { secrets: [geminiApiKey, googleApiKey] },
+  async (request) => {
+    if (!request.auth) {
+      throw new Error('unauthenticated: You must be logged in to generate orders.');
+    }
+
+    try {
+      const batchSize = Math.floor(Math.random() * 6) + 5; // 5–10 orders
+      const orderPromises = [];
+
+      for (let i = 0; i < batchSize; i++) {
+        orderPromises.push((async () => {
+          const addressObj = getRandomAddress();
+          const coords = await getLatLon(addressObj.fullAddress);
+
+          const lat = coords ? coords.lat : 40.8262;
+          const lon = coords ? coords.lon : -74.0660;
+
+          const familySize = Math.floor(Math.random() * 6) + 1;
+          let orderDetails = await getRandomOrderFromGemini(familySize);
+
+          if (!orderDetails) {
+            orderDetails = {
+              order_items: [
+                `${familySize} large cheese pizza${familySize > 1 ? 's' : ''}`,
+                "1 garlic knots"
+              ]
+            };
+          }
+
+          const { total, tip } = estimatedOrderCost(familySize);
+          const isVip = Math.random() < 0.15;
+          const finalTip = isVip ? parseFloat((tip * 3).toFixed(2)) : tip;
+
+          return {
+            status: 'queued',
+            is_vip: isVip,
+            date_placed: admin.firestore.FieldValue.serverTimestamp(),
+            date_delivered: null,
+            user_id: null,
+            address: {
+              street: addressObj.street,
+              town: addressObj.town.replace('_', ' '),
+              number: addressObj.number.toString(),
+              full_address: addressObj.fullAddress
+            },
+            items: orderDetails.order_items,
+            total_cost: total,
+            tip: finalTip,
+            latitude: lat,
+            longitude: lon
+          };
+        })());
+      }
+
+      const orders = await Promise.all(orderPromises);
+
+      // Write all orders to Firestore
+      const batch = db.batch();
+      const orderIds = [];
+      for (const order of orders) {
+        const docRef = db.collection("orders").doc();
+        batch.set(docRef, order);
+        orderIds.push(docRef.id);
+      }
+      await batch.commit();
+
+      // Send push notifications for any VIP orders in the batch
+      const vipOrders = orders.filter(o => o.is_vip);
+      if (vipOrders.length > 0) {
+        try {
+          const tokensSnapshot = await db.collectionGroup('tokens').get();
+          const tokens = tokensSnapshot.docs.map(d => d.data().token);
+
+          if (tokens.length > 0) {
+            const message = {
+              notification: {
+                title: '💎 VIP Order Alert!',
+                body: `${vipOrders.length} VIP order${vipOrders.length > 1 ? 's' : ''} just dropped! Big tips guaranteed!`
+              },
+              tokens: tokens
+            };
+            if (admin.messaging().sendEachForMulticast) {
+              await admin.messaging().sendEachForMulticast(message);
+            } else {
+              await admin.messaging().sendMulticast(message);
+            }
+          }
+        } catch (pushError) {
+          console.error('Error sending VIP push notification:', pushError);
+        }
+      }
+
+      return {
+        success: true,
+        count: orders.length,
+        orderIds: orderIds
+      };
+
+    } catch (error) {
+      console.error("Error generating order batch:", error);
+      throw new functions.https.HttpsError('internal', 'Failed to generate order batch.');
+    }
+  });
+
 // Background function to process delivered orders and award achievements
 exports.processOrderAchievements = onDocumentUpdated("orders/{orderId}", async (event) => {
   const orderBefore = event.data.before.data();

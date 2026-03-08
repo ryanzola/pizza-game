@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Signin from './views/Signin.vue'
 import Home from './views/Home.vue'
 import Deliveries from './views/Deliveries.vue'
+import DeliveryDetail from './views/DeliveryDetail.vue'
 import Bank from './views/Bank.vue'
 import Info from './views/Info.vue'
 import PastDeliveries from './views/PastDeliveries.vue'
@@ -20,6 +21,11 @@ const routes = [
   {
     path: '/deliveries',
     component: Deliveries,
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/deliveries/:id',
+    component: DeliveryDetail,
     meta: { requiresAuth: true },
   },
   {

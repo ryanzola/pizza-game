@@ -33,7 +33,7 @@
         <div class="flex justify-between items-center">
           <div class="flex flex-col">
             <span class="text-gray-400 text-sm font-medium">Total Savings</span>
-            <span class="text-3xl font-extrabold tracking-tight text-green-400">${{ savings_amount }}</span>
+            <span class="text-3xl font-extrabold tracking-tight text-green-400">${{ Number(savings_amount).toFixed(2) }}</span>
           </div>
         </div>
 
@@ -42,7 +42,7 @@
         <div class="flex justify-between items-center mb-1">
           <div class="flex flex-col">
             <span class="text-gray-400 text-sm font-medium">Current Balance (On Hand)</span>
-            <span class="text-xl font-bold tracking-tight text-white">${{ bank_amount }}</span>
+            <span class="text-xl font-bold tracking-tight text-white">${{ Number(bank_amount).toFixed(2) }}</span>
           </div>
           <span class="text-xs font-bold text-gray-500 bg-gray-800 px-2 py-1 rounded-lg">Limit $200</span>
         </div>
@@ -98,7 +98,6 @@ const isNearBank = computed(() => store.getters['location/isNearBank']);
 
 // Lifecycle
 onMounted(async () => {
-  console.log("Bank mounted");
   await store.dispatch('fetchSavings');
   await store.dispatch('fetchBank');
 });

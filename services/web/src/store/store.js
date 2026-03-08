@@ -172,7 +172,7 @@ const store = createStore({
 
         const currentBank = state.user.bank_amount || 0;
         const currentSavings = state.user.savings_amount || 0;
-        const newSavings = currentSavings + currentBank;
+        const newSavings = parseFloat((currentSavings + currentBank).toFixed(2));
 
         const userRef = doc(db, 'users', state.user.uid);
         await updateDoc(userRef, {
@@ -206,7 +206,7 @@ const store = createStore({
         if (!state.user?.uid) return;
 
         const currentBank = state.user.bank_amount || 0;
-        const newBank = currentBank + tip;
+        const newBank = parseFloat((currentBank + tip).toFixed(2));
 
         const userRef = doc(db, 'users', state.user.uid);
         await updateDoc(userRef, {

@@ -28,6 +28,11 @@ service cloud.firestore {
       allow delete: if false; // Sessions shouldn't be deleted
     }
 
+    match /pizzeria/{docId} {
+      allow read: if isAuth();
+      allow write: if false; // Only written by cloud functions
+    }
+
     match /orders/{orderId} {
       // Allow reading queued orders or orders belonging to the user
       allow read: if isAuth() && (resource.data.user_id == null || resource.data.user_id == request.auth.uid);
@@ -43,7 +48,8 @@ service cloud.firestore {
         (resource.data.user_id == request.auth.uid && request.resource.data.user_id == request.auth.uid)
       );
 
-      allow delete: if false; // Orders shouldn't be deleted, only cancelled
+      // Allow deleting queued, unclaimed orders (simulates other drivers taking them)
+      allow delete: if isAuth() && resource.data.status == 'queued' && resource.data.user_id == null;
     }
   }
 }
