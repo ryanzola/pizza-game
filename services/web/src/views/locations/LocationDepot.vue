@@ -1,8 +1,7 @@
 <template>
   <div class="depot-container h-full w-full flex flex-col pt-6 pb-6 px-4">
     <div class="flex justify-between items-end mb-6 border-b-2 border-[#ff3b30] pb-2">
-      <h1 class="font-mono text-3xl font-black tracking-tighter uppercase text-white">Rest. Depot</h1>
-      <p class="text-xs font-black text-[#ff3b30] font-mono uppercase bg-[#3a0a08] px-2 py-0.5 rounded-sm tracking-widest border border-[#ff3b30]/30">Bulk Supply</p>
+      <h1 class="font-mono text-3xl font-black tracking-tighter uppercase text-white">Restaurant Depot</h1>
     </div>
 
     <!-- Loading State -->
@@ -22,6 +21,11 @@
           item.data.current >= item.data.max ? 'opacity-40 pointer-events-none' : ''
         ]"
       >
+        <!-- Background watermark (clipped by its own container) -->
+        <div class="absolute inset-0 overflow-hidden pointer-events-none">
+          <div class="absolute -right-2 -bottom-3 text-5xl font-black text-white/[0.03] uppercase italic select-none leading-none">{{ item.label }}</div>
+        </div>
+
         <!-- Header: emoji + name -->
         <div class="flex justify-between items-center mb-3">
           <div class="flex items-center gap-2.5">
