@@ -103,8 +103,9 @@ const endSession = () => store.dispatch('end_session');
 onMounted(() => {
   try {
     store.dispatch('orders/listenToQueuedOrders');
+    store.dispatch('inventory/listenToInventory');
   } catch (error) {
-    console.error('Error starting order listener:', error);
+    console.error('Error starting listeners:', error);
   } finally {
     loading.value = false;
   }
@@ -112,6 +113,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   store.dispatch('orders/stopListeningToQueuedOrders');
+  store.dispatch('inventory/stopListeningToInventory');
 });
 
 </script>

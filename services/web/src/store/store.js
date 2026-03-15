@@ -8,6 +8,7 @@ import { getToken, onMessage } from "firebase/messaging";
 import location from './location';
 import orders from './orders';
 import achievements from './achievements';
+import inventory from './inventory';
 
 import createPersistedState from "vuex-persistedstate";
 
@@ -18,6 +19,7 @@ const store = createStore({
     location,
     orders,
     achievements,
+    inventory,
   },
   state() {
     return {

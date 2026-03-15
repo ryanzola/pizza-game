@@ -4,8 +4,12 @@
       <Square3Stack3DIcon />
     </router-link>
 
-    <router-link to="/pizzeria">
+    <router-link to="/pizzeria" class="relative">
       <BuildingStorefrontIcon />
+      <span 
+        v-if="stockStatus !== 'ok'" 
+        :class="['stock-badge', stockStatus === 'out' ? 'badge-red' : 'badge-yellow']"
+      >!</span>
     </router-link>
 
     <router-link to="/">
@@ -33,7 +37,7 @@ import {
   Square3Stack3DIcon,
   BuildingStorefrontIcon,
 } from '@heroicons/vue/24/outline'
-import { mapState } from 'vuex'
+import { mapState, mapGetters } from 'vuex'
 
 export default {
   components: {
@@ -44,7 +48,8 @@ export default {
     BuildingStorefrontIcon,
   },
   computed: {
-    ...mapState(['user'])
+    ...mapState(['user']),
+    ...mapGetters('inventory', ['stockStatus']),
   },
 }
 </script>
@@ -68,5 +73,23 @@ a svg {
 
 .home {
   @apply scale-150;
+}
+
+.stock-badge {
+  @apply 
+    absolute -top-1 -right-2
+    w-4 h-4 
+    rounded-full 
+    flex items-center justify-center
+    text-[9px] font-black leading-none
+    animate-pulse;
+}
+
+.badge-yellow {
+  @apply bg-yellow-500 text-black;
+}
+
+.badge-red {
+  @apply bg-red-500 text-white;
 }
 </style>

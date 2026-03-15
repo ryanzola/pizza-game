@@ -12,6 +12,44 @@ const geminiApiKey = defineSecret("GEMINI_API_KEY");
 // Import the parsed residential addresses
 const addressesData = require("./data/addresses.json");
 const menuData = require("./data/menu.json");
+const resourcesData = require("./data/resources.json");
+
+// Classify order items into resource categories using keyword matching
+const classifyOrderResources = (orderItems) => {
+  const deductions = {};
+  const resources = resourcesData.resources;
+
+  for (const item of orderItems) {
+    const itemLower = item.toLowerCase();
+    for (const [resourceKey, resourceDef] of Object.entries(resources)) {
+      const matched = resourceDef.keywords.some(kw => itemLower.includes(kw));
+      if (matched) {
+        deductions[resourceKey] = (deductions[resourceKey] || 0) + 1;
+      }
+    }
+  }
+
+  return deductions;
+};
+
+// Get the current level and multiplier from delivery count
+const getLevelInfo = (totalDeliveries) => {
+  const thresholds = resourcesData.level_thresholds;
+  let currentLevel = thresholds[0];
+  for (const threshold of thresholds) {
+    if (totalDeliveries >= threshold.deliveries) {
+      currentLevel = threshold;
+    } else {
+      break;
+    }
+  }
+  return currentLevel;
+};
+
+// Calculate scaled max for a resource at a given level
+const getScaledMax = (baseMax, multiplier) => {
+  return Math.floor(baseMax * multiplier);
+};
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -235,6 +273,23 @@ exports.generateOrderBatch = onCall(
     }
 
     try {
+      // Check inventory before generating orders
+      const inventoryRef = db.collection('pizzeria').doc('inventory');
+      const inventorySnap = await inventoryRef.get();
+
+      if (inventorySnap.exists) {
+        const inv = inventorySnap.data();
+        const depleted = [];
+        for (const [key, def] of Object.entries(resourcesData.resources)) {
+          if (inv[key] && inv[key].current <= 0) {
+            depleted.push(key);
+          }
+        }
+        if (depleted.length > 0) {
+          return { success: false, reason: 'out_of_stock', depleted };
+        }
+      }
+
       const batchSize = Math.floor(Math.random() * 6) + 5; // 5–10 orders
       const orderPromises = [];
 
@@ -285,15 +340,40 @@ exports.generateOrderBatch = onCall(
 
       const orders = await Promise.all(orderPromises);
 
-      // Write all orders to Firestore
-      const batch = db.batch();
-      const orderIds = [];
+      // Deduct resources from inventory based on order items
+      const totalDeductions = {};
       for (const order of orders) {
-        const docRef = db.collection("orders").doc();
-        batch.set(docRef, order);
-        orderIds.push(docRef.id);
+        const deductions = classifyOrderResources(order.items);
+        for (const [key, amount] of Object.entries(deductions)) {
+          totalDeductions[key] = (totalDeductions[key] || 0) + amount;
+        }
       }
-      await batch.commit();
+
+      // Write orders and deduct inventory in a transaction
+      const orderIds = [];
+      await db.runTransaction(async (transaction) => {
+        const invSnap = await transaction.get(inventoryRef);
+        const inv = invSnap.exists ? invSnap.data() : {};
+
+        // Apply deductions (floor at 0)
+        const updates = {};
+        for (const [key, amount] of Object.entries(totalDeductions)) {
+          if (inv[key]) {
+            updates[`${key}.current`] = Math.max(0, (inv[key].current || 0) - amount);
+          }
+        }
+
+        if (Object.keys(updates).length > 0) {
+          transaction.update(inventoryRef, updates);
+        }
+
+        // Write orders
+        for (const order of orders) {
+          const docRef = db.collection("orders").doc();
+          transaction.set(docRef, order);
+          orderIds.push(docRef.id);
+        }
+      });
 
       // Send push notifications for any VIP orders in the batch
       const vipOrders = orders.filter(o => o.is_vip);
@@ -397,16 +477,45 @@ exports.processOrderAchievements = onDocumentUpdated("orders/{orderId}", async (
           bank_amount: admin.firestore.FieldValue.increment(orderAfter.tip || 0)
         }, { merge: true });
 
-        // Update Pizzeria Finances
+        // Update Pizzeria Finances + Level Check
         const revenue = orderAfter.total_cost || 0;
+        const newLevelInfo = getLevelInfo(stats.total_deliveries);
+
         if (!pizzeriaDoc.exists) {
           transaction.set(pizzeriaRef, {
-            bank_balance: 1000 + revenue
+            bank_balance: 1000 + revenue,
+            level: newLevelInfo.level,
+            total_lifetime_deliveries: stats.total_deliveries
           });
         } else {
-          transaction.set(pizzeriaRef, {
-            bank_balance: admin.firestore.FieldValue.increment(revenue)
-          }, { merge: true });
+          const currentData = pizzeriaDoc.data();
+          const currentLevel = currentData.level || 1;
+          const updateData = {
+            bank_balance: admin.firestore.FieldValue.increment(revenue),
+            total_lifetime_deliveries: stats.total_deliveries
+          };
+
+          // Level up! Scale max capacity for all resources
+          if (newLevelInfo.level > currentLevel) {
+            updateData.level = newLevelInfo.level;
+            console.log(`Pizzeria leveled up to ${newLevelInfo.level}! Multiplier: ${newLevelInfo.multiplier}x`);
+
+            // Scale inventory max values
+            const inventoryRef = db.collection('pizzeria').doc('inventory');
+            const invSnap = await transaction.get(inventoryRef);
+            if (invSnap.exists) {
+              const invData = invSnap.data();
+              const invUpdates = {};
+              for (const [key, def] of Object.entries(resourcesData.resources)) {
+                if (invData[key]) {
+                  invUpdates[`${key}.max`] = getScaledMax(def.base_max, newLevelInfo.multiplier);
+                }
+              }
+              transaction.update(inventoryRef, invUpdates);
+            }
+          }
+
+          transaction.set(pizzeriaRef, updateData, { merge: true });
         }
 
         // 4. Check & Award Achievements
@@ -465,5 +574,89 @@ exports.processOrderAchievements = onDocumentUpdated("orders/{orderId}", async (
     } catch (error) {
       console.error("Error processing achievements:", error);
     }
+  }
+});
+
+// Restock inventory at depot or bakery
+exports.restockInventory = onCall(async (request) => {
+  if (!request.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'You must be logged in to restock.');
+  }
+
+  const { items, source } = request.data;
+
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'Items array is required.');
+  }
+
+  if (!['depot', 'bakery'].includes(source)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Source must be depot or bakery.');
+  }
+
+  // Validate all items match the source location
+  for (const item of items) {
+    const resourceDef = resourcesData.resources[item.resource];
+    if (!resourceDef) {
+      throw new functions.https.HttpsError('invalid-argument', `Unknown resource: ${item.resource}`);
+    }
+    if (resourceDef.restock_location !== source) {
+      throw new functions.https.HttpsError('invalid-argument', `${item.resource} cannot be restocked at ${source}. Must be restocked at ${resourceDef.restock_location}.`);
+    }
+  }
+
+  try {
+    const result = await db.runTransaction(async (transaction) => {
+      const financesRef = db.collection('pizzeria').doc('finances');
+      const inventoryRef = db.collection('pizzeria').doc('inventory');
+
+      const [financesSnap, inventorySnap] = await Promise.all([
+        transaction.get(financesRef),
+        transaction.get(inventoryRef)
+      ]);
+
+      const finances = financesSnap.exists ? financesSnap.data() : { bank_balance: 0 };
+      const inventory = inventorySnap.exists ? inventorySnap.data() : {};
+
+      // Calculate total cost
+      let totalCost = 0;
+      const restockUpdates = {};
+
+      for (const item of items) {
+        const resourceDef = resourcesData.resources[item.resource];
+        const currentData = inventory[item.resource] || { current: 0, max: resourceDef.base_max };
+        const deficit = Math.max(0, currentData.max - currentData.current);
+        const quantityToRestock = Math.min(item.quantity || deficit, deficit);
+        const cost = quantityToRestock * resourceDef.restock_cost_per_unit;
+
+        totalCost += cost;
+        restockUpdates[`${item.resource}.current`] = currentData.current + quantityToRestock;
+      }
+
+      totalCost = parseFloat(totalCost.toFixed(2));
+
+      // Check if pizzeria can afford it
+      if (finances.bank_balance < totalCost) {
+        throw new functions.https.HttpsError('failed-precondition', `Insufficient funds. Need $${totalCost.toFixed(2)} but only have $${finances.bank_balance.toFixed(2)}.`);
+      }
+
+      // Apply updates
+      restockUpdates.last_restocked = admin.firestore.FieldValue.serverTimestamp();
+      transaction.update(inventoryRef, restockUpdates);
+      transaction.update(financesRef, {
+        bank_balance: admin.firestore.FieldValue.increment(-totalCost)
+      });
+
+      return {
+        success: true,
+        total_cost: totalCost,
+        new_balance: parseFloat((finances.bank_balance - totalCost).toFixed(2))
+      };
+    });
+
+    return result;
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('Error restocking inventory:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to restock inventory.');
   }
 });

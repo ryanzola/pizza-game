@@ -1,0 +1,97 @@
+{
+  "level_thresholds": [
+    { "level": 1, "deliveries": 0, "multiplier": 1.0 },
+    { "level": 2, "deliveries": 15, "multiplier": 1.15 },
+    { "level": 3, "deliveries": 35, "multiplier": 1.3 },
+    { "level": 4, "deliveries": 60, "multiplier": 1.5 },
+    { "level": 5, "deliveries": 100, "multiplier": 1.75 },
+    { "level": 6, "deliveries": 150, "multiplier": 2.0 },
+    { "level": 7, "deliveries": 220, "multiplier": 2.3 },
+    { "level": 8, "deliveries": 300, "multiplier": 2.6 },
+    { "level": 9, "deliveries": 400, "multiplier": 3.0 },
+    { "level": 10, "deliveries": 500, "multiplier": 3.5 }
+  ],
+  "resources": {
+    "dough": {
+      "label": "Dough",
+      "icon": "🍕",
+      "unit": "batches",
+      "base_max": 50,
+      "restock_location": "depot",
+      "restock_cost_per_unit": 1.50,
+      "keywords": ["pizza", "calzone", "stromboli", "roll", "sicilian", "grandma", "margherita"]
+    },
+    "cheese": {
+      "label": "Cheese",
+      "icon": "🧀",
+      "unit": "lbs",
+      "base_max": 40,
+      "restock_location": "depot",
+      "restock_cost_per_unit": 1.50,
+      "keywords": ["cheese", "mozzarella", "provolone", "parmigiana", "parmesan", "pizza", "calzone", "lasagna", "manicotti", "stuffed shells"]
+    },
+    "proteins": {
+      "label": "Proteins",
+      "icon": "🍗",
+      "unit": "lbs",
+      "base_max": 30,
+      "restock_location": "depot",
+      "restock_cost_per_unit": 3.00,
+      "keywords": ["chicken", "veal", "shrimp", "sausage", "meatball", "calamari", "clam", "mussel", "scungilli", "flounder", "salmon", "ham", "salami", "prosciutto", "turkey", "roast beef", "steak", "bacon", "pepperoni"]
+    },
+    "produce": {
+      "label": "Produce",
+      "icon": "🥬",
+      "unit": "crates",
+      "base_max": 25,
+      "restock_location": "depot",
+      "restock_cost_per_unit": 1.40,
+      "keywords": ["salad", "lettuce", "tomato", "onion", "pepper", "broccoli", "spinach", "eggplant", "mushroom", "vegetable", "asparagus", "zucchini", "escarole", "caesar"]
+    },
+    "pasta": {
+      "label": "Pasta",
+      "icon": "🍝",
+      "unit": "boxes",
+      "base_max": 20,
+      "restock_location": "depot",
+      "restock_cost_per_unit": 1.50,
+      "keywords": ["pasta", "penne", "linguine", "spaghetti", "fettuccine", "cavatelli", "fusilli", "bowtie", "ravioli", "rigatoni", "tortellini", "lasagna", "manicotti", "stuffed shells", "mac"]
+    },
+    "fry_oil": {
+      "label": "Fry Oil",
+      "icon": "🛢️",
+      "unit": "gallons",
+      "base_max": 15,
+      "restock_location": "depot",
+      "restock_cost_per_unit": 1.67,
+      "keywords": ["fried", "french fries", "fries", "mozzarella sticks", "zucchini sticks", "chicken finger", "popcorn shrimp", "calamari"]
+    },
+    "beverages": {
+      "label": "Beverages",
+      "icon": "🥤",
+      "unit": "cases",
+      "base_max": 40,
+      "restock_location": "depot",
+      "restock_cost_per_unit": 1.00,
+      "keywords": ["soda", "coke", "sprite", "diet", "water", "snapple", "liter", "drink", "beverage"]
+    },
+    "desserts": {
+      "label": "Desserts",
+      "icon": "🍰",
+      "unit": "trays",
+      "base_max": 10,
+      "restock_location": "depot",
+      "restock_cost_per_unit": 2.00,
+      "keywords": ["cannoli", "tiramisu", "cake", "dessert"]
+    },
+    "bread": {
+      "label": "Bread",
+      "icon": "🍞",
+      "unit": "loaves",
+      "base_max": 80,
+      "restock_location": "bakery",
+      "restock_cost_per_unit": 0.625,
+      "keywords": ["sandwich", "sub", "wrap", "garlic bread", "roll"]
+    }
+  }
+}

@@ -10,8 +10,20 @@
     <ul class="orders-list flex flex-col gap-3 flex-1">
       <Order v-for="order in pendingOrders" :key="order.id" :order="order" :selected="selected.includes(order.id)" @change="toggleOrderSelection" />
       
+      <!-- Out of Stock State -->
+      <div v-if="isOutOfStock && !isGenerating" class="flex flex-col items-center justify-center py-10 px-4 text-center bg-red-950/30 rounded-2xl border border-red-900/50 shadow-sm">
+        <div class="w-16 h-16 bg-red-900/30 rounded-full flex items-center justify-center mb-3">
+          <span class="text-3xl">⚠️</span>
+        </div>
+        <h3 class="text-lg font-bold text-red-400">Out of Stock</h3>
+        <p class="text-sm text-gray-400 mt-1 max-w-[260px]">The pizzeria is out of ingredients. Visit the <span class="text-red-400 font-semibold">Restaurant Depot</span> to restock supplies.</p>
+        <div v-if="depletedResources.length > 0" class="flex flex-wrap gap-1.5 mt-3 justify-center">
+          <span v-for="r in depletedResources" :key="r" class="text-[10px] uppercase font-bold tracking-wider bg-red-900/40 text-red-400 px-2 py-0.5 rounded-md border border-red-800/30">{{ r.replace('_', ' ') }}</span>
+        </div>
+      </div>
+
       <!-- Empty State -->
-      <div v-if="pendingOrders.length === 0 && !isGenerating" class="flex flex-col items-center justify-center py-12 px-4 text-center bg-[#1c1c1e] rounded-2xl border border-gray-800 shadow-sm">
+      <div v-if="pendingOrders.length === 0 && !isGenerating && !isOutOfStock" class="flex flex-col items-center justify-center py-12 px-4 text-center bg-[#1c1c1e] rounded-2xl border border-gray-800 shadow-sm">
         <div class="w-16 h-16 bg-[#2c2c2e] rounded-full flex items-center justify-center mb-3">
             <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
         </div>
@@ -78,25 +90,34 @@ const pendingOrders = computed(() => {
 });
 
 const isNearPizzeria = computed(() => store.getters['location/isNearPizzeria']);
+const hasActiveSession = computed(() => {
+  const session = store.state.session || {};
+  return session.status === 'active' && !session.ended_at;
+});
 
-// Watch for arrival at pizzeria — auto-generate orders
-watch(isNearPizzeria, async (isNear) => {
-  if (isNear && !hasGeneratedThisVisit.value && pendingOrders.value.length === 0) {
+// Watch for arrival at pizzeria — auto-generate orders (only with active session)
+watch([isNearPizzeria, hasActiveSession], async ([isNear, isActive]) => {
+  if (isNear && isActive && !hasGeneratedThisVisit.value && pendingOrders.value.length === 0 && !isOutOfStock.value) {
     await generateBatch();
   }
   if (!isNear) {
-    // Reset so orders regenerate on next visit
     hasGeneratedThisVisit.value = false;
   }
 }, { immediate: true });
 
+const isOutOfStock = computed(() => store.getters['inventory/isOutOfStock']);
+const depletedResources = computed(() => store.getters['inventory/depletedResources']);
+
 const generateBatch = async () => {
-  if (isGenerating.value) return;
+  if (isGenerating.value || isOutOfStock.value) return;
   isGenerating.value = true;
   hasGeneratedThisVisit.value = true;
   try {
     const generateOrderBatch = httpsCallable(functions, 'generateOrderBatch');
-    await generateOrderBatch();
+    const result = await generateOrderBatch();
+    if (result.data && !result.data.success && result.data.reason === 'out_of_stock') {
+      console.warn('Cannot generate orders — out of stock:', result.data.depleted);
+    }
   } catch (error) {
     console.error('Error generating order batch:', error);
     hasGeneratedThisVisit.value = false; // Allow retry on error
