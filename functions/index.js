@@ -479,20 +479,22 @@ exports.processOrderAchievements = onDocumentUpdated("orders/{orderId}", async (
 
         // Update Pizzeria Finances + Level Check
         const revenue = orderAfter.total_cost || 0;
-        const newLevelInfo = getLevelInfo(stats.total_deliveries);
 
         if (!pizzeriaDoc.exists) {
           transaction.set(pizzeriaRef, {
             bank_balance: 1000 + revenue,
-            level: newLevelInfo.level,
-            total_lifetime_deliveries: stats.total_deliveries
+            level: 1,
+            total_lifetime_deliveries: 1
           });
         } else {
           const currentData = pizzeriaDoc.data();
           const currentLevel = currentData.level || 1;
+          const newDeliveryCount = (currentData.total_lifetime_deliveries || 0) + 1;
+          const newLevelInfo = getLevelInfo(newDeliveryCount);
+
           const updateData = {
             bank_balance: admin.firestore.FieldValue.increment(revenue),
-            total_lifetime_deliveries: stats.total_deliveries
+            total_lifetime_deliveries: admin.firestore.FieldValue.increment(1)
           };
 
           // Level up! Scale max capacity for all resources

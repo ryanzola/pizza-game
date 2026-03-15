@@ -24,7 +24,7 @@ const store = createStore({
   state() {
     return {
       user: null,
-      debug_mode: true,
+      debug_mode: false,
       session: {
         session_id: null,
         status: null,

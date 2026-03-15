@@ -16,7 +16,13 @@ A location-based mobile game where you run a pizzeria — deliver orders across 
 
 ## Screenshots
 
-> _Coming soon_
+| Home | Depot | Bakery | Pizzeria |
+|------|-------|--------|----------|
+| ![Home](docs/screenshots/home.png) | ![Depot](docs/screenshots/depot.png) | ![Bakery](docs/screenshots/bakery.png) | ![Pizzeria](docs/screenshots/pizzeria.png) |
+
+| Deliveries | Delivery Detail | Bank | Profile |
+|------------|----------------|------|---------|
+| ![Deliveries](docs/screenshots/deliveries.png) | ![Detail](docs/screenshots/delivery-detail.png) | ![Bank](docs/screenshots/bank.png) | ![Profile](docs/screenshots/profile.png) |
 
 ## Tech Stack
 

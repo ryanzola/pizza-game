@@ -17,45 +17,38 @@
         :key="item.key"
         @click="toggleCart(item.key)"
         :class="[
-          'resource-card bg-[#1a1a1c] p-4 border-l-4 border border-gray-800 relative overflow-hidden cursor-pointer transition-all duration-200 active:scale-[0.98]',
+          'resource-card bg-[#1a1a1c] p-5 border-l-4 border border-gray-800 rounded-sm relative cursor-pointer transition-all duration-200 active:scale-[0.98]',
           isInCart(item.key) ? 'border-l-[#ff3b30] bg-[#1a0806] border-[#ff3b30]/30' : 'border-l-gray-700 hover:bg-[#222225]',
           item.data.current >= item.data.max ? 'opacity-40 pointer-events-none' : ''
         ]"
       >
-        <!-- Background label -->
-        <div class="absolute -right-2 -top-2 text-6xl font-black text-white/[0.02] uppercase italic pointer-events-none">{{ item.label }}</div>
-
-        <div class="relative z-10">
-          <div class="flex justify-between items-start mb-3">
-            <div class="flex items-center gap-2">
-              <span class="text-2xl">{{ item.icon }}</span>
-              <h3 class="font-mono text-lg font-bold text-gray-100 uppercase tracking-tight">{{ item.label }}</h3>
-            </div>
-            <div class="flex items-center gap-2">
-              <span v-if="isInCart(item.key)" class="text-[#ff3b30] font-mono text-xs font-bold uppercase animate-pulse">Added</span>
-              <span class="font-mono text-sm font-bold" :class="getDeficitCost(item) > 0 ? 'text-[#ff3b30]' : 'text-gray-600'">
-                {{ getDeficitCost(item) > 0 ? `-$${getDeficitCost(item).toFixed(2)}` : 'Full' }}
-              </span>
-            </div>
+        <!-- Header: emoji + name -->
+        <div class="flex justify-between items-center mb-3">
+          <div class="flex items-center gap-2.5">
+            <span class="text-xl">{{ item.icon }}</span>
+            <h3 class="font-mono text-base font-bold text-gray-100 uppercase tracking-wide">{{ item.label }}</h3>
           </div>
-
-          <!-- Stock Bar -->
-          <div class="w-full h-2 bg-gray-800 overflow-hidden mb-1.5">
-            <div 
-              class="h-full transition-all duration-500"
-              :class="getStockBarColor(item)"
-              :style="{ width: getStockPercent(item) + '%' }"
-            ></div>
-          </div>
-          <div class="flex justify-between">
-            <p class="text-gray-500 text-[10px] font-mono uppercase tracking-wider">{{ item.data.current }} / {{ item.data.max }} {{ item.unit }}</p>
-            <p v-if="getDeficit(item) > 0" class="text-gray-600 text-[10px] font-mono uppercase tracking-wider">Need {{ getDeficit(item) }} {{ item.unit }}</p>
+          <div class="flex items-center gap-2 shrink-0">
+            <span v-if="isInCart(item.key)" class="text-[#ff3b30] font-mono text-[10px] font-bold uppercase animate-pulse">Added</span>
+            <span class="font-mono text-sm font-bold" :class="getDeficitCost(item) > 0 ? 'text-[#ff3b30]' : 'text-gray-600'">
+              {{ getDeficitCost(item) > 0 ? `-$${getDeficitCost(item).toFixed(2)}` : 'Full' }}
+            </span>
           </div>
         </div>
 
-        <!-- Selected Checkmark -->
-        <div v-if="isInCart(item.key)" class="absolute top-3 right-3 w-6 h-6 bg-[#ff3b30] flex items-center justify-center">
-          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="square" stroke-linejoin="miter" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+        <!-- Stock Bar -->
+        <div class="w-full h-2 bg-gray-800 rounded-sm overflow-hidden mb-2">
+          <div 
+            class="h-full transition-all duration-500"
+            :class="getStockBarColor(item)"
+            :style="{ width: getStockPercent(item) + '%' }"
+          ></div>
+        </div>
+
+        <!-- Stats row -->
+        <div class="flex justify-between">
+          <p class="text-gray-500 text-[10px] font-mono uppercase tracking-wider">{{ item.data.current }} / {{ item.data.max }} {{ item.unit }}</p>
+          <p v-if="getDeficit(item) > 0" class="text-gray-600 text-[10px] font-mono uppercase tracking-wider">Need {{ getDeficit(item) }}</p>
         </div>
       </div>
     </div>
