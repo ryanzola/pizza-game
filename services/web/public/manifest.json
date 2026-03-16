@@ -1,12 +1,12 @@
 {
-  "name": "Pizza 🥭",
-  "short_name": "Pizza 🥭",
+  "name": "PizzaManGo 🥭",
+  "short_name": "PizzaManGo 🥭",
   "start_url": ".",
-  "display": "fullscreen",
+  "display": "standalone",
   "orientation": "portrait",
-  "theme_color": "#3E456B",
+  "theme_color": "#000000",
   "background_color": "#000000",
-  "description": "Make that ass clap",
+  "description": "A location-based pizza delivery game",
   "icons": [
     {
         "src": "/icon-192x192.png",

@@ -10,12 +10,36 @@
 }
 
 * {
-  /* remove overscroll behavior */
+  /* Remove overscroll behavior */
   overscroll-behavior: none;
+
+  /* Disable text selection (native app feel) */
+  -webkit-user-select: none;
+  user-select: none;
+
+  /* Disable tap highlight on iOS/Android */
+  -webkit-tap-highlight-color: transparent;
+
+  /* Disable long-press callout (iOS) */
+  -webkit-touch-callout: none;
+}
+
+/* Re-enable selection for actual text inputs */
+input, textarea, [contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Prevent image drag */
+img {
+  -webkit-user-drag: none;
+  user-drag: none;
+  pointer-events: none;
 }
 
 body {
-  @apply min-w-[375px] h-screen
+  @apply min-w-[375px] h-screen;
+  padding-top: env(safe-area-inset-top);
 }
 
 #app {
