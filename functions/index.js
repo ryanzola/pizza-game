@@ -112,6 +112,83 @@ const getLatLon = async (addressStr) => {
   }
 };
 
+// ---------------------------------------------------------------------------
+// Delivery address selection
+// ---------------------------------------------------------------------------
+// Orders should form a plausible driving route: not on top of the pizzeria
+// (an address inside the delivery radius would auto-complete the moment the
+// driver pulls out), not absurdly far, and not stacked on top of each other.
+const SPAWN_MIN_FROM_PIZZERIA_M = 400;
+const SPAWN_MAX_FROM_PIZZERIA_M = 4000;
+const SPAWN_MIN_SEPARATION_M = 200;
+// Random draws per slot before we give up and take the best we saw.
+const SPAWN_MAX_ATTEMPTS = 6;
+
+// Geocoding is billed per call and the address list is static, so cache
+// results in Firestore (and per-instance in memory).
+const geocodeMemo = new Map();
+const geocodeCacheRef = (addressStr) =>
+  db.collection('geocache').doc(encodeURIComponent(addressStr.toLowerCase()));
+
+const getLatLonCached = async (addressStr) => {
+  if (geocodeMemo.has(addressStr)) return geocodeMemo.get(addressStr);
+  try {
+    const snap = await geocodeCacheRef(addressStr).get();
+    if (snap.exists) {
+      const { lat, lon } = snap.data();
+      const coords = { lat, lon };
+      geocodeMemo.set(addressStr, coords);
+      return coords;
+    }
+  } catch (e) {
+    console.warn('geocache read failed:', e.message);
+  }
+  const coords = await getLatLon(addressStr);
+  if (coords) {
+    geocodeMemo.set(addressStr, coords);
+    geocodeCacheRef(addressStr).set({ ...coords, address: addressStr, cached_at: admin.firestore.FieldValue.serverTimestamp() })
+      .catch((e) => console.warn('geocache write failed:', e.message));
+  }
+  return coords;
+};
+
+const distanceFromPizzeriaM = (lat, lon) =>
+  haversineMeters(POIS.pizzeria.latitude, POIS.pizzeria.longitude, lat, lon);
+
+/**
+ * Pick one geocoded delivery address satisfying the spawn constraints, or
+ * the least-bad candidate if none did. `taken` is a list of {lat, lon}
+ * already used in this batch. Returns { addressObj, lat, lon } or null if
+ * nothing could be geocoded at all.
+ */
+const pickDeliveryAddress = async (taken = []) => {
+  let best = null;
+  for (let attempt = 0; attempt < SPAWN_MAX_ATTEMPTS; attempt++) {
+    const addressObj = getRandomAddress();
+    const coords = await getLatLonCached(addressObj.fullAddress);
+    if (!coords) continue;
+    const { lat, lon } = coords;
+
+    const fromPizzeria = distanceFromPizzeriaM(lat, lon);
+    const tooClose = fromPizzeria < SPAWN_MIN_FROM_PIZZERIA_M;
+    const tooFar = fromPizzeria > SPAWN_MAX_FROM_PIZZERIA_M;
+    const crowded = taken.some((t) => haversineMeters(t.lat, t.lon, lat, lon) < SPAWN_MIN_SEPARATION_M);
+
+    const candidate = { addressObj, lat, lon };
+    if (!tooClose && !tooFar && !crowded) return candidate;
+    // Never fall back to something inside the auto-deliver zone; anything
+    // else is acceptable as a last resort.
+    if (!tooClose && (best === null || (!crowded && best.crowded))) {
+      best = { ...candidate, crowded };
+    }
+  }
+  if (best) {
+    console.warn(`pickDeliveryAddress: no ideal candidate after ${SPAWN_MAX_ATTEMPTS} attempts, using ${best.addressObj.fullAddress}`);
+    return { addressObj: best.addressObj, lat: best.lat, lon: best.lon };
+  }
+  return null;
+};
+
 const estimatedOrderCost = (familySize) => {
   const costPerPerson = Math.random() * (15 - 5) + 5;
   const costVariance = Math.random() * (1.2 - 0.8) + 0.8;
@@ -180,12 +257,13 @@ exports.generateOrder = onCall(
     }
 
     try {
-      const addressObj = getRandomAddress();
-      const coords = await getLatLon(addressObj.fullAddress);
-
       // Provide a valid fallback if geocoding fails to prevent breaking the game
-      const lat = coords ? coords.lat : POIS.geocodeFallback.latitude;
-      const lon = coords ? coords.lon : POIS.geocodeFallback.longitude;
+      const picked = (await pickDeliveryAddress()) ?? {
+        addressObj: getRandomAddress(),
+        lat: POIS.geocodeFallback.latitude,
+        lon: POIS.geocodeFallback.longitude,
+      };
+      const { addressObj, lat, lon } = picked;
 
       const familySize = Math.floor(Math.random() * 6) + 1;
       let orderDetails = await getRandomOrderFromGemini(familySize);
@@ -294,16 +372,20 @@ exports.generateOrderBatch = onCall(
       }
 
       const batchSize = Math.floor(Math.random() * 6) + 5; // 5–10 orders
-      const orderPromises = [];
 
+      // Pick addresses sequentially so each can be spaced from the previous
+      // ones; the (slow) order-content generation then runs in parallel.
+      const picks = [];
       for (let i = 0; i < batchSize; i++) {
-        orderPromises.push((async () => {
-          const addressObj = getRandomAddress();
-          const coords = await getLatLon(addressObj.fullAddress);
+        const picked = await pickDeliveryAddress(picks);
+        if (picked) picks.push(picked);
+      }
+      if (picks.length === 0) {
+        // Geocoder unavailable: keep the game playable with one fallback order.
+        picks.push({ addressObj: getRandomAddress(), lat: POIS.geocodeFallback.latitude, lon: POIS.geocodeFallback.longitude });
+      }
 
-          const lat = coords ? coords.lat : POIS.geocodeFallback.latitude;
-          const lon = coords ? coords.lon : POIS.geocodeFallback.longitude;
-
+      const orderPromises = picks.map(({ addressObj, lat, lon }) => (async () => {
           const familySize = Math.floor(Math.random() * 6) + 1;
           let orderDetails = await getRandomOrderFromGemini(familySize);
 
@@ -339,7 +421,6 @@ exports.generateOrderBatch = onCall(
             longitude: lon
           };
         })());
-      }
 
       const orders = await Promise.all(orderPromises);
 

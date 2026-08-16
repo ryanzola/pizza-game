@@ -34,6 +34,11 @@ service cloud.firestore {
       allow delete: if false; // Sessions shouldn't be deleted
     }
 
+    // Geocoding cache written by Cloud Functions; never needed by clients.
+    match /geocache/{docId} {
+      allow read, write: if false;
+    }
+
     match /pizzeria/{docId} {
       allow read: if isAuth();
       allow write: if false; // Only written by cloud functions
