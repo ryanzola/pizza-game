@@ -13,6 +13,8 @@ const geminiApiKey = defineSecret("GEMINI_API_KEY");
 const addressesData = require("./data/addresses.json");
 const menuData = require("./data/menu.json");
 const resourcesData = require("./data/resources.json");
+// Fixed game locations, shared with the web client (services/web/src/store/location.js).
+const POIS = require("./data/pois.json");
 
 // Classify order items into resource categories using keyword matching
 const classifyOrderResources = (orderItems) => {
@@ -181,8 +183,8 @@ exports.generateOrder = onCall(
       const coords = await getLatLon(addressObj.fullAddress);
 
       // Provide a valid fallback if geocoding fails to prevent breaking the game
-      const lat = coords ? coords.lat : 40.8262;
-      const lon = coords ? coords.lon : -74.0660;
+      const lat = coords ? coords.lat : POIS.geocodeFallback.latitude;
+      const lon = coords ? coords.lon : POIS.geocodeFallback.longitude;
 
       const familySize = Math.floor(Math.random() * 6) + 1;
       let orderDetails = await getRandomOrderFromGemini(familySize);
@@ -298,8 +300,8 @@ exports.generateOrderBatch = onCall(
           const addressObj = getRandomAddress();
           const coords = await getLatLon(addressObj.fullAddress);
 
-          const lat = coords ? coords.lat : 40.8262;
-          const lon = coords ? coords.lon : -74.0660;
+          const lat = coords ? coords.lat : POIS.geocodeFallback.latitude;
+          const lon = coords ? coords.lon : POIS.geocodeFallback.longitude;
 
           const familySize = Math.floor(Math.random() * 6) + 1;
           let orderDetails = await getRandomOrderFromGemini(familySize);
@@ -632,15 +634,14 @@ exports.processOrderAchievements = onDocumentUpdated("orders/{orderId}", async (
         stats.total_deliveries += 1;
         stats.total_tips += (orderAfter.tip || 0);
 
-        // Calculate distance
-        if (orderAfter.latitude && orderAfter.longitude) {
-          const pixLat = 40.8262;
-          const pixLon = -74.0660;
-
-          const latDiff = pixLat - orderAfter.latitude;
-          const lonDiff = pixLon - orderAfter.longitude;
-
-          const distKm = Math.sqrt(Math.pow(latDiff, 2) + Math.pow(lonDiff, 2)) * 111;
+        // Distance covered: straight-line pizzeria -> drop-off (a proxy; the
+        // client doesn't report a track). Uses the real pizzeria location and
+        // great-circle distance.
+        if (isFiniteNumber(orderAfter.latitude) && isFiniteNumber(orderAfter.longitude)) {
+          const distKm = haversineMeters(
+            POIS.pizzeria.latitude, POIS.pizzeria.longitude,
+            orderAfter.latitude, orderAfter.longitude
+          ) / 1000;
           stats.total_distance_km += distKm;
         }
 
