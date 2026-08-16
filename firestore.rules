@@ -20,6 +20,12 @@ service cloud.firestore {
         allow read: if isAuth() && request.auth.uid == userId;
         allow write: if false; // Only written by cloud functions
       }
+
+      // Last server-accepted GPS fix, used by deliverOrder for teleport checks.
+      match /telemetry/{docId} {
+        allow read: if isAuth() && request.auth.uid == userId;
+        allow write: if false; // Only written by cloud functions
+      }
     }
 
     match /sessions/{sessionId} {
@@ -43,10 +49,17 @@ service cloud.firestore {
       // Allow users to update an order IF:
       // 1. They are claiming a currently unassigned order
       // 2. They already own the order and are updating its status
-      allow update: if isAuth() && (
-        (resource.data.user_id == null && request.resource.data.user_id == request.auth.uid) ||
-        (resource.data.user_id == request.auth.uid && request.resource.data.user_id == request.auth.uid)
-      );
+      // Marking an order 'delivered' is reserved for the deliverOrder Cloud
+      // Function, which verifies the player's location server-side. Delivered
+      // orders are final: clients can't move them back to re-deliver.
+      allow update: if isAuth()
+        && resource.data.status != 'delivered'
+        && request.resource.data.status != 'delivered'
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['date_delivered', 'delivered_at'])
+        && (
+          (resource.data.user_id == null && request.resource.data.user_id == request.auth.uid) ||
+          (resource.data.user_id == request.auth.uid && request.resource.data.user_id == request.auth.uid)
+        );
 
       // Allow deleting queued, unclaimed orders (simulates other drivers taking them)
       allow delete: if isAuth() && resource.data.status == 'queued' && resource.data.user_id == null;

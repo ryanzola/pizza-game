@@ -413,6 +413,184 @@ exports.generateOrderBatch = onCall(
     }
   });
 
+// ---------------------------------------------------------------------------
+// Server-side delivery verification
+// ---------------------------------------------------------------------------
+
+// Drive-by delivery model: the player passes the house in a car and does not
+// need to stop, so the radius is generous and padded by the reported GPS
+// accuracy (capped so a wildly inaccurate fix can't reach across the street).
+const DELIVERY_BASE_RADIUS_M = 100;
+const DELIVERY_MAX_ACCURACY_PAD_M = 50;
+// Largest radius the server will ever accept. The web client's pre-check
+// (services/web/src/store/orders.js DELIVERY_PRECHECK_RADIUS_M) must match.
+const DELIVERY_MAX_RADIUS_M = DELIVERY_BASE_RADIUS_M + DELIVERY_MAX_ACCURACY_PAD_M;
+// Fixes worse than this are too vague to prove the player was at the house.
+const DELIVERY_MAX_ACCURACY_M = 150;
+// Implied ground speed above this between two accepted fixes is treated as
+// GPS spoofing / teleporting. 45 m/s ≈ 100 mph — well above street driving.
+const MAX_PLAUSIBLE_SPEED_MPS = 45;
+// Ignore the teleport check when the previous fix is older than this — the
+// player may legitimately have driven far while the app was backgrounded.
+const TELEPORT_CHECK_WINDOW_MS = 30 * 60 * 1000;
+// Never divide by a tiny dt: two calls a few hundred ms apart would turn
+// metres of GPS jitter into hundreds of m/s.
+const TELEPORT_MIN_DT_SEC = 2;
+// A fix rejected as a teleport is remembered; if the player keeps reporting a
+// consistent position for this long we accept the new location. This lets a
+// real player recover from one glitchy fix (~10 s) while forcing a spoofer to
+// hold each faked position rather than hop instantly.
+const TELEPORT_CONFIRM_MS = 10 * 1000;
+
+const deg2rad = (deg) => deg * (Math.PI / 180);
+
+const haversineMeters = (lat1, lon1, lat2, lon2) => {
+  const R = 6371e3;
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+const isFiniteNumber = (v) => typeof v === 'number' && Number.isFinite(v);
+const tsToMillis = (ts) => (ts && typeof ts.toMillis === 'function') ? ts.toMillis() : null;
+
+// Is moving from `prev` to the current fix physically plausible? Distance is
+// reduced by both fixes' accuracy so jitter inside the error circles doesn't
+// count as movement. Unknown/stale/too-recent prev → plausible (no evidence).
+const isPlausibleMove = (prev, fix, now) => {
+  const prevAt = tsToMillis(prev?.at);
+  if (!prevAt || !isFiniteNumber(prev.latitude) || !isFiniteNumber(prev.longitude)) return true;
+  const dtSec = (now - prevAt) / 1000;
+  if (dtSec < TELEPORT_MIN_DT_SEC || dtSec * 1000 > TELEPORT_CHECK_WINDOW_MS) return true;
+  const raw = haversineMeters(prev.latitude, prev.longitude, fix.latitude, fix.longitude);
+  const moved = Math.max(0, raw - (prev.accuracy ?? 0) - (fix.accuracy ?? 0));
+  return moved / dtSec <= MAX_PLAUSIBLE_SPEED_MPS;
+};
+
+// Throws for anything that means "stop retrying" (not yours, wrong status).
+const assertDeliverable = (orderSnap, uid) => {
+  if (!orderSnap.exists) {
+    throw new functions.https.HttpsError('not-found', 'Order not found.');
+  }
+  const order = orderSnap.data();
+  if (order.user_id !== uid) {
+    throw new functions.https.HttpsError('permission-denied', 'This order is not assigned to you.');
+  }
+  if (order.status === 'delivered') return order; // idempotent path, caller handles
+  if (!['pending', 'en_route'].includes(order.status)) {
+    throw new functions.https.HttpsError('failed-precondition', `Order cannot be delivered from status '${order.status}'.`);
+  }
+  if (!isFiniteNumber(order.latitude) || !isFiniteNumber(order.longitude)) {
+    throw new functions.https.HttpsError('failed-precondition', 'Order has no delivery coordinates.');
+  }
+  return order;
+};
+
+/**
+ * deliverOrder({ orderId, latitude, longitude, accuracy })
+ *
+ * The client reports its position; the server decides whether the order is
+ * delivered. Clients are not allowed to set status 'delivered' directly (see
+ * firestore.rules). The existing processOrderAchievements trigger still fires
+ * on the status change and handles payouts/achievements.
+ *
+ * Returns { success: true, distance } or { success: false, reason, ... } for
+ * "soft" rejections (too far, poor accuracy, implausible movement) so the
+ * client can simply try again on its next GPS fix. Hard errors (bad args,
+ * not your order, wrong status) throw HttpsError.
+ *
+ * The common "not there yet" case is answered with a single plain read and no
+ * writes; the transaction only runs once the position is inside the radius.
+ */
+exports.deliverOrder = onCall(async (request) => {
+  if (!request.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'You must be logged in to deliver orders.');
+  }
+  const uid = request.auth.uid;
+  const { orderId, latitude, longitude, accuracy } = request.data || {};
+
+  if (typeof orderId !== 'string' || !orderId) {
+    throw new functions.https.HttpsError('invalid-argument', 'orderId is required.');
+  }
+  if (!isFiniteNumber(latitude) || !isFiniteNumber(longitude) ||
+      latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+    throw new functions.https.HttpsError('invalid-argument', 'A valid latitude/longitude is required.');
+  }
+  const acc = isFiniteNumber(accuracy) && accuracy >= 0 ? accuracy : null;
+  const fix = { latitude, longitude, accuracy: acc };
+
+  if (acc !== null && acc > DELIVERY_MAX_ACCURACY_M) {
+    return { success: false, reason: 'poor_accuracy', accuracy: acc };
+  }
+
+  const orderRef = db.collection('orders').doc(orderId);
+  const positionRef = db.collection('users').doc(uid).collection('telemetry').doc('last_position');
+  const radius = DELIVERY_BASE_RADIUS_M + Math.min(acc ?? 0, DELIVERY_MAX_ACCURACY_PAD_M);
+
+  try {
+    // Cheap pre-check: no transaction, no writes, for the routine "still
+    // driving up" case.
+    const preOrder = assertDeliverable(await orderRef.get(), uid);
+    if (preOrder.status === 'delivered') return { success: true, alreadyDelivered: true };
+    const distance = haversineMeters(latitude, longitude, preOrder.latitude, preOrder.longitude);
+    if (distance > radius) {
+      return { success: false, reason: 'too_far', distance, radius };
+    }
+
+    return await db.runTransaction(async (tx) => {
+      const [orderSnap, posSnap] = await Promise.all([tx.get(orderRef), tx.get(positionRef)]);
+      const order = assertDeliverable(orderSnap, uid);
+      if (order.status === 'delivered') return { success: true, alreadyDelivered: true };
+
+      const now = Date.now();
+      const telemetry = posSnap.exists ? posSnap.data() : {};
+
+      // Teleport / spoof check against the last accepted position.
+      if (!isPlausibleMove(telemetry, fix, now)) {
+        // Consistent with a previously rejected fix for long enough? Then the
+        // earlier accepted fix was the glitch — accept the new location.
+        const rejected = telemetry.rejected;
+        const rejectedAt = tsToMillis(rejected?.at);
+        const confirmed = rejected && rejectedAt &&
+          now - rejectedAt >= TELEPORT_CONFIRM_MS &&
+          isPlausibleMove(rejected, fix, now);
+        if (!confirmed) {
+          console.warn(`deliverOrder: implausible movement for ${uid}; awaiting confirmation`);
+          // Only start the confirmation clock if there is no pending rejected
+          // fix that this one is consistent with (keep the earliest timestamp).
+          if (!rejected || !isPlausibleMove(rejected, fix, now)) {
+            tx.set(positionRef, {
+              rejected: { ...fix, at: admin.firestore.FieldValue.serverTimestamp() }
+            }, { merge: true });
+          }
+          return { success: false, reason: 'implausible_movement' };
+        }
+      }
+
+      tx.set(positionRef, {
+        ...fix,
+        at: admin.firestore.FieldValue.serverTimestamp(),
+        rejected: admin.firestore.FieldValue.delete()
+      }, { merge: true });
+
+      tx.update(orderRef, {
+        status: 'delivered',
+        date_delivered: admin.firestore.FieldValue.serverTimestamp(),
+        delivered_at: fix
+      });
+
+      return { success: true, distance };
+    });
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('deliverOrder failed:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to deliver order.');
+  }
+});
+
 // Background function to process delivered orders and award achievements
 exports.processOrderAchievements = onDocumentUpdated("orders/{orderId}", async (event) => {
   const orderBefore = event.data.before.data();

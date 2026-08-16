@@ -1,16 +1,26 @@
-import { getDistanceFromLatLonInM } from './storeUtils';
-import { db } from '../firebase/init';
-import { collection, doc, query, where, getDocs, updateDoc, writeBatch, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { getDistanceFromLatLonInM, toMillis } from './storeUtils';
+import { db, functions } from '../firebase/init';
+import { collection, doc, query, where, getDocs, updateDoc, writeBatch, onSnapshot } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 
 const baseWaitTime = 30 * 60 * 1000; // 30 minutes in milliseconds
 
+// Client-side pre-check radius: only decides whether to *ask* the server,
+// which applies the authoritative accuracy-padded check. Must equal the
+// server's DELIVERY_MAX_RADIUS_M (functions/index.js) — anything beyond it
+// can never succeed and would just burn callable invocations.
+const DELIVERY_PRECHECK_RADIUS_M = 150;
+
 let queuedOrdersUnsubscribe = null;
+const deliverOrderFn = httpsCallable(functions, 'deliverOrder');
+// Order ids with an in-flight status update, so a burst of GPS ticks doesn't
+// fire duplicate requests for the same order.
+const inFlight = new Set();
 
 const state = {
   orders: [],
   selected_orders: [],
   waitTime: baseWaitTime,
-  isUpdating: false,
 }
 
 const mutations = {
@@ -52,7 +62,7 @@ const mutations = {
 }
 
 const actions = {
-  checkAndUpdateOrderStatus({ state, commit, rootState }) {
+  checkAndUpdateOrderStatus({ state, commit, dispatch, rootState }) {
     // only orders with status of 'pending' or 'en_route' are checked
     const filteredOrders = state.selected_orders.filter(order => ['pending', 'en_route'].includes(order.status));
     const multiplier = 1.1;
@@ -66,59 +76,50 @@ const actions = {
 
     state.waitTime = totalWaitTime;
 
-    const playerLatitude = rootState.location.player.latitude;
-    const playerLongitude = rootState.location.player.longitude;
-
+    const { latitude, longitude, accuracy } = rootState.location.player;
+    const hasFix = Boolean(rootState.location.locationAvailable && latitude && longitude);
 
     filteredOrders.forEach(async order => {
-      let newStatus = null;
-      // Ensure date_placed is correctly parsed
-      let orderTimeMs;
-      if (order.date_placed && typeof order.date_placed.toMillis === 'function') {
-        orderTimeMs = order.date_placed.toMillis();
-      } else if (order.date_placed && order.date_placed.seconds) {
-        orderTimeMs = order.date_placed.seconds * 1000;
-      } else {
-        orderTimeMs = new Date(order.date_placed).getTime() || Date.now();
+      if (inFlight.has(order.id)) return;
+
+      const expired = Date.now() - toMillis(order.date_placed) > cancellationTime;
+
+      let nearOrder = false;
+      if (hasFix && order.latitude && order.longitude) {
+        const distanceToOrder = getDistanceFromLatLonInM(latitude, longitude, order.latitude, order.longitude);
+        nearOrder = distanceToOrder <= DELIVERY_PRECHECK_RADIUS_M;
       }
-      const timeSinceOrderPlaced = Date.now() - orderTimeMs;
 
-      if (order.latitude && order.longitude) {
-        const distanceToOrder = getDistanceFromLatLonInM(
-          playerLatitude,
-          playerLongitude,
-          order.latitude,
-          order.longitude
-        );
+      if (!nearOrder && !expired) return;
 
-        if (distanceToOrder <= rootState.location.thresholdDistance) {
-          newStatus = 'delivered';
+      inFlight.add(order.id);
+      try {
+        let delivered = false;
+        if (nearOrder) {
+          // The server verifies position and marks the order delivered.
+          const { data } = await deliverOrderFn({ orderId: order.id, latitude, longitude, accuracy });
+          delivered = Boolean(data?.success);
+          if (delivered) {
+            commit('UPDATE_ORDER_STATUS', { orderId: order.id, status: 'delivered' });
+          } else if (data?.reason && data.reason !== 'too_far') {
+            // too_far is routine at the edge of the pre-check radius; log the rest.
+            console.warn(`Delivery for ${order.id} not accepted: ${data.reason}`, data);
+          }
         }
-      }
-
-      if (!newStatus && timeSinceOrderPlaced > cancellationTime) {
-        newStatus = 'cancelled';
-      }
-
-      if (newStatus && !state.isUpdating) {
-        state.isUpdating = true;
-
-        try {
-          const orderRef = doc(db, 'orders', order.id);
-
-          const updateData = { status: newStatus };
-          if (newStatus === 'delivered') updateData.date_delivered = serverTimestamp();
-
-          await updateDoc(orderRef, updateData);
-
-          commit('UPDATE_ORDER_STATUS', { orderId: order.id, status: newStatus });
-
-        } catch (error) {
-          console.error('Failed to update order status:', error);
-          throw error;
-        } finally {
-          state.isUpdating = false
+        // An expired order the server wouldn't accept still gets cancelled.
+        if (!delivered && expired) {
+          await updateDoc(doc(db, 'orders', order.id), { status: 'cancelled' });
+          commit('UPDATE_ORDER_STATUS', { orderId: order.id, status: 'cancelled' });
         }
+      } catch (error) {
+        console.error('Failed to update order status:', error);
+        // The server says this order isn't ours / isn't deliverable any more:
+        // our local copy is stale, so resync instead of retrying every GPS tick.
+        if (['functions/failed-precondition', 'functions/not-found', 'functions/permission-denied'].includes(error?.code)) {
+          dispatch('fetchSelectedOrders');
+        }
+      } finally {
+        inFlight.delete(order.id);
       }
     });
   },

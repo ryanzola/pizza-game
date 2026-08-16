@@ -68,13 +68,12 @@ import { computed, ref, watch } from 'vue';
 import { useStore } from 'vuex';
 import { useRouter } from 'vue-router';
 import { ChevronDoubleRightIcon } from '@heroicons/vue/24/solid';
-import { getFunctions, httpsCallable } from "firebase/functions";
-import { app } from '../../firebase/init';
+import { httpsCallable } from "firebase/functions";
+import { functions } from '../../firebase/init';
 import Order from "../../components/Order.vue";
 
 const store = useStore();
 const router = useRouter();
-const functions = getFunctions(app, 'us-central1');
 
 const props = defineProps({
   loading: Boolean
