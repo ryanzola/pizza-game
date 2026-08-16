@@ -1,4 +1,5 @@
 import { getDistanceFromLatLonInM } from './storeUtils';
+import sharedPois from '../../../../functions/data/pois.json';
 
 // --- Tuning -----------------------------------------------------------------
 // This is a driving game: the player passes POIs and houses in a car, so we
@@ -35,11 +36,12 @@ const WATCH_OPTIONS = {
   maximumAge: 2 * 1000,
 };
 
+// Fixed game locations, shared with Cloud Functions (single source of truth).
 const POIS = {
-  pizzeria: { latitude: 40.86233731197237, longitude: -74.07808261920567 },
-  depot: { latitude: 40.868516031424704, longitude: -74.04757385194837 },
-  bank: { latitude: 40.86082582150665, longitude: -74.07959384969016 },
-  bakery: { latitude: 40.87485155936898, longitude: -74.10014034710848 },
+  pizzeria: sharedPois.pizzeria,
+  depot: sharedPois.depot,
+  bank: sharedPois.bank,
+  bakery: sharedPois.bakery,
 };
 
 const NOWHERE = { pizzeria: false, depot: false, bank: false, bakery: false };

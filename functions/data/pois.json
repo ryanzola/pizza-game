@@ -1,0 +1,8 @@
+{
+  "_comment": "Single source of truth for fixed game locations. Consumed by functions/index.js and services/web/src/store/location.js.",
+  "pizzeria": { "name": "Ryan's Pizzeria", "latitude": 40.86233731197237, "longitude": -74.07808261920567 },
+  "depot":    { "name": "Restaurant Depot", "latitude": 40.868516031424704, "longitude": -74.04757385194837 },
+  "bank":     { "name": "Bank", "latitude": 40.86082582150665, "longitude": -74.07959384969016 },
+  "bakery":   { "name": "Bakery", "latitude": 40.87485155936898, "longitude": -74.10014034710848 },
+  "geocodeFallback": { "name": "Fallback delivery point used when geocoding fails", "latitude": 40.8262, "longitude": -74.0660 }
+}
