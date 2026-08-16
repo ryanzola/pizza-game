@@ -20,6 +20,7 @@ const state = {
   player: {
     latitude: 0.0,
     longitude: 0.0,
+    accuracy: null, // metres, from the last GPS fix
   },
   lastVisited: null,
   locationAvailable: false,
@@ -28,9 +29,10 @@ const state = {
 };
 
 const mutations = {
-  setLatLong(state, { latitude, longitude }) {
+  setLatLong(state, { latitude, longitude, accuracy = null }) {
     state.player.latitude = latitude;
     state.player.longitude = longitude;
+    state.player.accuracy = accuracy;
   },
   setLocationAvailable(state, available) {
     state.locationAvailable = available;
@@ -50,7 +52,8 @@ const actions = {
         position => {
           commit('setLatLong', {
             latitude: position.coords.latitude,
-            longitude: position.coords.longitude
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
           });
           commit('setLocationAvailable', true);
 

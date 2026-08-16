@@ -413,6 +413,145 @@ exports.generateOrderBatch = onCall(
     }
   });
 
+// ---------------------------------------------------------------------------
+// Server-side delivery verification
+// ---------------------------------------------------------------------------
+
+// Drive-by delivery model: the player passes the house in a car and does not
+// need to stop, so the radius is generous and padded by the reported GPS
+// accuracy (capped so a wildly inaccurate fix can't reach across the street).
+const DELIVERY_BASE_RADIUS_M = 100;
+const DELIVERY_MAX_ACCURACY_PAD_M = 50;
+// Fixes worse than this are too vague to prove the player was at the house.
+const DELIVERY_MAX_ACCURACY_M = 150;
+// Implied ground speed above this between two accepted fixes is treated as
+// GPS spoofing / teleporting. 45 m/s ≈ 100 mph — well above street driving.
+const MAX_PLAUSIBLE_SPEED_MPS = 45;
+// Ignore the teleport check when the previous fix is older than this — the
+// player may legitimately have driven far while the app was backgrounded.
+const TELEPORT_CHECK_WINDOW_MS = 30 * 60 * 1000;
+
+const deg2rad = (deg) => deg * (Math.PI / 180);
+
+const haversineMeters = (lat1, lon1, lat2, lon2) => {
+  const R = 6371e3;
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+const isFiniteNumber = (v) => typeof v === 'number' && Number.isFinite(v);
+
+/**
+ * deliverOrder({ orderId, latitude, longitude, accuracy })
+ *
+ * The client reports its position; the server decides whether the order is
+ * delivered. Clients are not allowed to set status 'delivered' directly (see
+ * firestore.rules). The existing processOrderAchievements trigger still fires
+ * on the status change and handles payouts/achievements.
+ *
+ * Returns { success: true, distance } or { success: false, reason, ... } for
+ * "soft" rejections (too far, poor accuracy, implausible movement) so the
+ * client can simply try again on its next GPS fix. Hard errors (bad args,
+ * not your order, wrong status) throw HttpsError.
+ */
+exports.deliverOrder = onCall(async (request) => {
+  if (!request.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'You must be logged in to deliver orders.');
+  }
+  const uid = request.auth.uid;
+  const { orderId, latitude, longitude, accuracy } = request.data || {};
+
+  if (typeof orderId !== 'string' || !orderId) {
+    throw new functions.https.HttpsError('invalid-argument', 'orderId is required.');
+  }
+  if (!isFiniteNumber(latitude) || !isFiniteNumber(longitude) ||
+      latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+    throw new functions.https.HttpsError('invalid-argument', 'A valid latitude/longitude is required.');
+  }
+  const acc = isFiniteNumber(accuracy) && accuracy >= 0 ? accuracy : null;
+
+  if (acc !== null && acc > DELIVERY_MAX_ACCURACY_M) {
+    return { success: false, reason: 'poor_accuracy', accuracy: acc };
+  }
+
+  const orderRef = db.collection('orders').doc(orderId);
+  const positionRef = db.collection('users').doc(uid).collection('telemetry').doc('last_position');
+
+  try {
+    return await db.runTransaction(async (tx) => {
+      const [orderSnap, posSnap] = await Promise.all([tx.get(orderRef), tx.get(positionRef)]);
+
+      if (!orderSnap.exists) {
+        throw new functions.https.HttpsError('not-found', 'Order not found.');
+      }
+      const order = orderSnap.data();
+      if (order.user_id !== uid) {
+        throw new functions.https.HttpsError('permission-denied', 'This order is not assigned to you.');
+      }
+      if (order.status === 'delivered') {
+        // Idempotent: a retry after a dropped response shouldn't error.
+        return { success: true, alreadyDelivered: true };
+      }
+      if (!['pending', 'en_route'].includes(order.status)) {
+        throw new functions.https.HttpsError('failed-precondition', `Order cannot be delivered from status '${order.status}'.`);
+      }
+      if (!isFiniteNumber(order.latitude) || !isFiniteNumber(order.longitude)) {
+        throw new functions.https.HttpsError('failed-precondition', 'Order has no delivery coordinates.');
+      }
+
+      const now = Date.now();
+
+      // Teleport / spoof check against the last position we accepted.
+      if (posSnap.exists) {
+        const last = posSnap.data();
+        const lastAt = last.at && typeof last.at.toMillis === 'function' ? last.at.toMillis() : null;
+        if (lastAt && isFiniteNumber(last.latitude) && isFiniteNumber(last.longitude)) {
+          const dtSec = (now - lastAt) / 1000;
+          if (dtSec > 0 && dtSec * 1000 <= TELEPORT_CHECK_WINDOW_MS) {
+            const moved = haversineMeters(last.latitude, last.longitude, latitude, longitude);
+            const impliedSpeed = moved / dtSec;
+            if (impliedSpeed > MAX_PLAUSIBLE_SPEED_MPS) {
+              console.warn(`deliverOrder: implausible movement for ${uid}: ${moved.toFixed(0)}m in ${dtSec.toFixed(1)}s`);
+              return { success: false, reason: 'implausible_movement', impliedSpeed };
+            }
+          }
+        }
+      }
+
+      const distance = haversineMeters(latitude, longitude, order.latitude, order.longitude);
+      const radius = DELIVERY_BASE_RADIUS_M + Math.min(acc ?? 0, DELIVERY_MAX_ACCURACY_PAD_M);
+
+      // Record the fix regardless of outcome so the teleport check has a trail.
+      tx.set(positionRef, {
+        latitude,
+        longitude,
+        accuracy: acc,
+        at: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      if (distance > radius) {
+        return { success: false, reason: 'too_far', distance, radius };
+      }
+
+      tx.update(orderRef, {
+        status: 'delivered',
+        date_delivered: admin.firestore.FieldValue.serverTimestamp(),
+        delivered_at: { latitude, longitude, accuracy: acc, distance }
+      });
+
+      return { success: true, distance, radius };
+    });
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('deliverOrder failed:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to deliver order.');
+  }
+});
+
 // Background function to process delivered orders and award achievements
 exports.processOrderAchievements = onDocumentUpdated("orders/{orderId}", async (event) => {
   const orderBefore = event.data.before.data();
