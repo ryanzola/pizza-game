@@ -1,15 +1,16 @@
 import { getDistanceFromLatLonInM, toMillis } from './storeUtils';
+import { isWithin } from './location';
 import { db, functions } from '../firebase/init';
 import { collection, doc, query, where, getDocs, updateDoc, writeBatch, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 
 const baseWaitTime = 30 * 60 * 1000; // 30 minutes in milliseconds
 
-// Client-side pre-check radius: only decides whether to *ask* the server,
-// which applies the authoritative accuracy-padded check. Must equal the
-// server's DELIVERY_MAX_RADIUS_M (functions/index.js) — anything beyond it
-// can never succeed and would just burn callable invocations.
-const DELIVERY_PRECHECK_RADIUS_M = 150;
+// Client-side pre-check: only decides whether to *ask* the server, which
+// applies the authoritative check. Mirrors the server's formula
+// (functions/index.js: DELIVERY_BASE_RADIUS_M + min(accuracy, PAD)) so we
+// never call for a fix that can't succeed.
+const DELIVERY_BASE_RADIUS_M = 100;
 
 let queuedOrdersUnsubscribe = null;
 const deliverOrderFn = httpsCallable(functions, 'deliverOrder');
@@ -62,7 +63,7 @@ const mutations = {
 }
 
 const actions = {
-  checkAndUpdateOrderStatus({ state, commit, dispatch, rootState }) {
+  checkAndUpdateOrderStatus({ state, commit, dispatch, rootState, rootGetters }) {
     // only orders with status of 'pending' or 'en_route' are checked
     const filteredOrders = state.selected_orders.filter(order => ['pending', 'en_route'].includes(order.status));
     const multiplier = 1.1;
@@ -77,7 +78,8 @@ const actions = {
     state.waitTime = totalWaitTime;
 
     const { latitude, longitude, accuracy } = rootState.location.player;
-    const hasFix = Boolean(rootState.location.locationAvailable && latitude && longitude);
+    // Fresh and accurate enough to be worth sending to the server.
+    const hasFix = rootGetters['location/hasUsableFix'];
 
     filteredOrders.forEach(async order => {
       if (inFlight.has(order.id)) return;
@@ -87,7 +89,7 @@ const actions = {
       let nearOrder = false;
       if (hasFix && order.latitude && order.longitude) {
         const distanceToOrder = getDistanceFromLatLonInM(latitude, longitude, order.latitude, order.longitude);
-        nearOrder = distanceToOrder <= DELIVERY_PRECHECK_RADIUS_M;
+        nearOrder = isWithin(distanceToOrder, DELIVERY_BASE_RADIUS_M, accuracy);
       }
 
       if (!nearOrder && !expired) return;

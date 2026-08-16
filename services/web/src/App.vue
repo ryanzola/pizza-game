@@ -41,7 +41,10 @@ export default {
   },
   methods: {
     handleVisibilityChange() {
-      if (document.visibilityState === 'visible' && this.$store.getters.hasActiveSession) {
+      if (document.visibilityState !== 'visible') return;
+      // iOS often stops delivering fixes to a backgrounded PWA; kick the watch.
+      this.$store.dispatch('location/restartGeolocation');
+      if (this.$store.getters.hasActiveSession) {
         this.$store.dispatch('acquireWakeLock');
       }
     }
