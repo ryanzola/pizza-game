@@ -62,8 +62,13 @@ const selectedOrders = computed(() => store.state.orders.selected_orders || []);
 const completedOrdersList = ref([]);
 let unsubscribe = null;
 
+// Nearest first when we know where the player is; otherwise keep store order.
 const activeOrders = computed(() => {
-  return selectedOrders.value.filter(order => order.status !== 'delivered' && order.status !== 'cancelled');
+  const active = selectedOrders.value.filter(order => order.status !== 'delivered' && order.status !== 'cancelled');
+  const distanceTo = store.getters['location/distanceTo'];
+  const withDistance = active.map(order => ({ order, d: distanceTo(order.latitude, order.longitude)?.distance ?? Infinity }));
+  if (withDistance.every(x => x.d === Infinity)) return active;
+  return withDistance.sort((a, b) => a.d - b.d).map(x => x.order);
 });
 
 const completedOrders = computed(() => {

@@ -1,4 +1,4 @@
-import { getDistanceFromLatLonInM } from './storeUtils';
+import { getDistanceFromLatLonInM, getBearing } from './storeUtils';
 import sharedPois from '../../../../functions/data/pois.json';
 
 // --- Tuning -----------------------------------------------------------------
@@ -241,6 +241,16 @@ const getters = {
     if (acc === null || acc <= GOOD_ACCURACY_M) return 'good';
     if (acc <= MAX_USABLE_ACCURACY_M) return 'weak';
     return 'poor';
+  },
+  // Distance/bearing from the player to a point, or null without a fresh fix.
+  // (Bearing is relative to true north — we don't have a reliable heading.)
+  distanceTo: (state, getters) => (latitude, longitude) => {
+    if (!getters.hasFreshFix || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+    const { latitude: plat, longitude: plon } = state.player;
+    return {
+      distance: getDistanceFromLatLonInM(plat, plon, latitude, longitude),
+      bearing: getBearing(plat, plon, latitude, longitude),
+    };
   },
   // Proximity holds its last state through a brief poor-accuracy blip, but
   // not through a lost signal or revoked permission.
