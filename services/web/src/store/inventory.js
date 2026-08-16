@@ -1,9 +1,6 @@
-import { db } from '../firebase/init';
+import { db, functions } from '../firebase/init';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import { app } from '../firebase/init';
-
-const functions = getFunctions(app, 'us-central1');
+import { httpsCallable } from 'firebase/functions';
 
 let inventoryUnsubscribe = null;
 

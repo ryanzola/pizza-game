@@ -13,3 +13,10 @@ export function getDistanceFromLatLonInM(lat1, lon1, lat2, lon2) {
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c; // Distance in meters
 }
+// Normalise a Firestore Timestamp / {seconds} / Date / string to epoch ms.
+export function toMillis(ts) {
+  if (!ts) return Date.now();
+  if (typeof ts.toMillis === 'function') return ts.toMillis();
+  if (typeof ts.seconds === 'number') return ts.seconds * 1000;
+  return new Date(ts).getTime() || Date.now();
+}

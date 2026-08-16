@@ -50,8 +50,10 @@ service cloud.firestore {
       // 1. They are claiming a currently unassigned order
       // 2. They already own the order and are updating its status
       // Marking an order 'delivered' is reserved for the deliverOrder Cloud
-      // Function, which verifies the player's location server-side.
+      // Function, which verifies the player's location server-side. Delivered
+      // orders are final: clients can't move them back to re-deliver.
       allow update: if isAuth()
+        && resource.data.status != 'delivered'
         && request.resource.data.status != 'delivered'
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['date_delivered', 'delivered_at'])
         && (
