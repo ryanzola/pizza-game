@@ -1,125 +1,102 @@
 <template>
-  <div class="h-full bg-gray-900 text-white overflow-y-auto pb-24 font-sans">
+  <div class="bg-[#000000] h-full flex flex-col text-white">
     <!-- Header -->
-    <header class="bg-gradient-to-br from-red-600 to-orange-500 pt-12 pb-8 px-6 shadow-xl relative overflow-hidden">
-      <!-- Decorative background elements -->
-       <div class="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none" style="background-image: radial-gradient(circle at 20% 150%, white 0%, transparent 50%); mix-blend-mode: overlay;"></div>
-      
-      <div class="relative z-10 flex flex-col items-center">
-        <div class="h-24 w-24 bg-gray-800 rounded-full border-4 border-orange-300 shadow-2xl flex items-center justify-center text-5xl mb-3 overflow-hidden">
-          <img v-if="userPhoto" :src="userPhoto" alt="Profile avatar" class="h-full w-full object-cover">
-          <span v-else>🧑‍🍳</span>
-        </div>
-        <h1 class="text-3xl font-black text-white tracking-tight text-center">{{ userName || 'Driver' }}</h1>
-        <p class="text-orange-100 font-medium text-sm mt-1">Level {{ Math.max(1, Math.floor(lifetimeStats.total_deliveries / 10)) }} Pro</p>
-      </div>
-    </header>
+    <div class="px-4 pt-6 pb-2 shrink-0">
+      <h1 class="text-2xl font-bold tracking-tight">Profile</h1>
+    </div>
 
-    <div class="p-4 sm:p-6 max-w-4xl mx-auto space-y-8 mt-4">
-      
-      <!-- Stats Section -->
-      <section>
-        <h2 class="text-xl font-bold mb-4 text-gray-100 flex items-center"><span class="mr-2">📊</span> Lifetime Stats</h2>
-        <div class="grid grid-cols-2 gap-4">
-          
-          <div class="bg-gray-800/80 backdrop-blur-sm rounded-2xl p-4 border border-gray-700/50 shadow-lg relative overflow-hidden group">
-             <div class="absolute -right-4 -bottom-4 text-6xl opacity-10 group-hover:scale-110 transition-transform duration-300">📦</div>
-             <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-1">Total Deliveries</p>
-             <p class="text-3xl font-black text-orange-400">{{ lifetimeStats.total_deliveries || 0 }}</p>
+    <!-- Scrollable content -->
+    <div class="flex-1 overflow-y-auto px-4 pb-6 pt-2 space-y-4">
+
+      <!-- Identity card -->
+      <section class="bg-[#1c1c1e] rounded-3xl p-5 border border-gray-800 shadow-sm">
+        <div class="flex items-center gap-4">
+          <div class="h-16 w-16 rounded-full bg-[#2c2c2e] border border-gray-700 shrink-0 overflow-hidden flex items-center justify-center text-3xl">
+            <img v-if="userPhoto" :src="userPhoto" alt="Profile avatar" class="h-full w-full object-cover">
+            <span v-else>🧑‍🍳</span>
           </div>
-
-          <div class="bg-gray-800/80 backdrop-blur-sm rounded-2xl p-4 border border-gray-700/50 shadow-lg relative overflow-hidden group">
-             <div class="absolute -right-4 -bottom-4 text-6xl opacity-10 group-hover:scale-110 transition-transform duration-300">🛣️</div>
-             <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-1">Distance Covered</p>
-             <p class="text-3xl font-black text-orange-400">{{ Math.round(lifetimeStats.total_distance_km || 0) }} <span class="text-lg text-gray-500 font-bold">km</span></p>
+          <div class="flex flex-col min-w-0">
+            <h2 class="text-xl font-bold tracking-tight text-white truncate">{{ userName || 'Driver' }}</h2>
+            <p class="text-sm text-gray-400 truncate">{{ userEmail }}</p>
+            <span class="mt-2 self-start inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-blue-500/90 text-white backdrop-blur-md">
+              Level {{ level }}
+            </span>
           </div>
-
-          <div class="bg-gray-800/80 backdrop-blur-sm rounded-2xl p-4 border border-gray-700/50 shadow-lg relative overflow-hidden group">
-             <div class="absolute -right-4 -bottom-4 text-6xl opacity-10 group-hover:scale-110 transition-transform duration-300">🗺️</div>
-             <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-1">Unique Streets</p>
-             <p class="text-3xl font-black text-orange-400">{{ (lifetimeStats.unique_streets || []).length }}</p>
-          </div>
-
-          <div class="bg-gray-800/80 backdrop-blur-sm rounded-2xl p-4 border border-gray-700/50 shadow-lg relative overflow-hidden group">
-             <div class="absolute -right-4 -bottom-4 text-6xl opacity-10 group-hover:scale-110 transition-transform duration-300">💰</div>
-             <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-1">Total Tips</p>
-             <p class="text-3xl font-black text-orange-400"><span class="text-lg text-gray-500 font-bold">$</span>{{ (lifetimeStats.total_tips || 0).toFixed(2) }}</p>
-          </div>
-
         </div>
       </section>
 
-      <!-- Achievements Section -->
+      <!-- Lifetime stats -->
       <section>
-        <div class="flex justify-between items-end mb-4">
-          <h2 class="text-xl font-bold text-gray-100 flex items-center"><span class="mr-2">🏆</span> Achievements</h2>
-          <span class="text-sm font-semibold text-gray-400 bg-gray-800 px-3 py-1 rounded-full">
+        <h2 class="text-base font-bold text-gray-300 uppercase tracking-wider mb-3">Lifetime Stats</h2>
+        <div class="grid grid-cols-2 gap-3">
+          <div v-for="stat in stats" :key="stat.label" class="bg-[#1c1c1e] rounded-2xl p-4 border border-gray-800 shadow-sm">
+            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">{{ stat.label }}</p>
+            <p class="text-2xl font-extrabold tracking-tight" :class="stat.color">
+              <span v-if="stat.prefix" class="text-base text-gray-500 font-bold">{{ stat.prefix }}</span>{{ stat.value }}<span v-if="stat.suffix" class="text-base text-gray-500 font-bold ml-1">{{ stat.suffix }}</span>
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Achievements -->
+      <section>
+        <div class="flex justify-between items-end mb-3">
+          <h2 class="text-base font-bold text-gray-300 uppercase tracking-wider">Achievements</h2>
+          <span class="text-xs font-bold text-gray-400 bg-gray-800 px-2.5 py-1 rounded-full">
             {{ unlockedCount }} / {{ ACHIEVEMENT_CATALOG.length }}
           </span>
         </div>
-        
-        <div class="space-y-3">
-          <div 
-            v-for="ach in mappedAchievements" 
+        <ul class="flex flex-col gap-3">
+          <li
+            v-for="ach in mappedAchievements"
             :key="ach.id"
-            :class="[
-              'rounded-2xl p-4 border transition-all duration-300 flex items-center space-x-4 relative overflow-hidden',
-              ach.unlocked 
-                ? 'bg-gray-800/90 border-orange-500/30 shadow-lg shadow-orange-900/20' 
-                : 'bg-gray-800/30 border-gray-700/30 opacity-60 grayscale'
-            ]"
+            class="bg-[#1c1c1e] rounded-2xl p-4 border shadow-sm flex items-center gap-4 transition-colors"
+            :class="ach.unlocked ? 'border-blue-500/40' : 'border-gray-800 opacity-60'"
           >
-            <!-- Fancy background glow for unlocked -->
-            <div v-if="ach.unlocked" class="absolute inset-0 bg-gradient-to-r from-orange-500/10 to-red-500/5 pointer-events-none"></div>
-
-            <div :class="[
-              'flex-shrink-0 h-14 w-14 rounded-full flex items-center justify-center text-3xl shadow-inner border-2 z-10',
-              ach.unlocked ? 'bg-gradient-to-br from-yellow-400 to-orange-500 border-orange-300/50' : 'bg-gray-700 border-gray-600'
-            ]">
+            <div
+              class="shrink-0 h-12 w-12 rounded-xl flex items-center justify-center text-2xl border"
+              :class="ach.unlocked ? 'bg-blue-500/20 border-blue-500/30' : 'bg-[#2c2c2e] border-gray-700 grayscale'"
+            >
               {{ ach.icon }}
             </div>
-            
-            <div class="flex-1 z-10">
-              <h3 :class="['text-lg font-bold leading-tight', ach.unlocked ? 'text-white' : 'text-gray-300']">
-                {{ ach.title }}
-              </h3>
-              <p :class="['text-sm mt-1 leading-snug', ach.unlocked ? 'text-gray-300' : 'text-gray-500']">
-                {{ ach.description }}
-              </p>
-              <p v-if="ach.unlocked && ach.unlocked_at" class="text-[10px] uppercase tracking-wider text-orange-400 mt-2 font-bold opacity-80">
+            <div class="flex-1 min-w-0">
+              <h3 class="font-bold leading-tight" :class="ach.unlocked ? 'text-white' : 'text-gray-300'">{{ ach.title }}</h3>
+              <p class="text-sm mt-0.5 leading-snug" :class="ach.unlocked ? 'text-gray-400' : 'text-gray-500'">{{ ach.description }}</p>
+              <p v-if="ach.unlocked && ach.unlocked_at" class="text-[10px] uppercase tracking-wider text-blue-400 mt-1.5 font-bold">
                 Unlocked {{ formatDate(ach.unlocked_at) }}
               </p>
             </div>
-          </div>
-        </div>
+            <svg v-if="ach.unlocked" class="w-5 h-5 text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+          </li>
+        </ul>
       </section>
 
-      <!-- Settings Card -->
-      <section class="bg-gray-800/80 backdrop-blur-sm rounded-3xl p-5 border border-gray-700/50 shadow-sm mt-8">
-        <div class="flex items-center justify-between mb-6">
+      <!-- Settings -->
+      <section class="bg-[#1c1c1e] rounded-3xl p-5 border border-gray-800 shadow-sm flex flex-col gap-5">
+        <div class="flex items-center justify-between">
           <div class="flex flex-col">
-            <h2 class="text-xl font-bold text-white tracking-tight leading-tight">Developer Mode</h2>
+            <h2 class="text-lg font-bold text-white tracking-tight leading-tight">Developer Mode</h2>
             <p class="text-gray-400 text-sm mt-1">Test features from the couch.</p>
           </div>
-          <div class="relative">
-            <label for="debug" class="cursor-pointer relative inline-flex items-center">
-              <input 
-                class="sr-only peer"
-                type="checkbox" 
-                id="debug" 
-                name="debug"
-                :checked="$store.state.debug_mode"
-                @change="toggleDebugMode"
-              >
-              <div class="w-14 h-7 bg-gray-600 rounded-full peer peer-checked:bg-orange-500 transition-colors duration-300"></div>
-              <div class="absolute left-1 top-1 w-5 h-5 bg-white rounded-full transition-all duration-300 peer-checked:translate-x-7 shadow-sm"></div>
-            </label>
-          </div>
+          <label for="debug" class="cursor-pointer relative inline-flex items-center shrink-0">
+            <input
+              class="sr-only peer"
+              type="checkbox"
+              id="debug"
+              name="debug"
+              :checked="$store.state.debug_mode"
+              @change="toggleDebugMode"
+            >
+            <div class="w-14 h-8 bg-gray-700 border border-gray-600 rounded-full peer transition-colors peer-checked:bg-blue-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-7 after:w-7 after:transition-all peer-checked:after:translate-x-6"></div>
+          </label>
         </div>
 
-        <button class="w-full font-bold text-lg text-red-500 bg-red-500/10 hover:bg-red-500/20 active:bg-red-500/30 border border-red-500/20 py-3 rounded-2xl transition-colors" @click="logOut">
+        <div class="w-full h-[1px] bg-gray-800"></div>
+
+        <button class="w-full font-semibold text-lg text-red-500 bg-red-500/10 hover:bg-red-500/20 active:bg-red-500/30 border border-red-500/20 py-3 rounded-2xl transition-colors" @click="logOut">
           Log Out
         </button>
+        <p class="text-center text-xs text-gray-600">v{{ version }}</p>
       </section>
 
     </div>
@@ -129,6 +106,7 @@
 <script setup>
 import { computed } from 'vue';
 import { useStore } from 'vuex';
+import { useRouter } from 'vue-router';
 
 const store = useStore();
 
@@ -153,7 +131,18 @@ const userPhoto = computed(() => {
   return user?.picture || user?.photoURL || null;
 });
 
+const userEmail = computed(() => store.getters.user?.email || '');
+const version = computed(() => store.state.version);
+
 const lifetimeStats = computed(() => store.getters['achievements/lifetime_stats'] || {});
+const level = computed(() => Math.max(1, Math.floor((lifetimeStats.value.total_deliveries || 0) / 10)));
+
+const stats = computed(() => [
+  { label: 'Total Deliveries', value: lifetimeStats.value.total_deliveries || 0, color: 'text-white' },
+  { label: 'Distance Covered', value: Math.round(lifetimeStats.value.total_distance_km || 0), suffix: 'km', color: 'text-white' },
+  { label: 'Unique Streets', value: (lifetimeStats.value.unique_streets || []).length, color: 'text-white' },
+  { label: 'Total Tips', value: (lifetimeStats.value.total_tips || 0).toFixed(2), prefix: '$', color: 'text-green-400' },
+]);
 const unlockedAchievements = computed(() => store.getters['achievements/unlocked_achievements'] || []);
 
 const unlockedCount = computed(() => unlockedAchievements.value.length);
@@ -176,7 +165,6 @@ const formatDate = (timestamp) => {
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 };
 
-import { useRouter } from 'vue-router';
 const router = useRouter();
 
 const toggleDebugMode = () => {
