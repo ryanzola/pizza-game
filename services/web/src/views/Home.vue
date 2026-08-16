@@ -89,6 +89,7 @@ const signalBanner = computed(() => {
   const red = 'bg-red-900/40 text-red-400 border-red-900/50';
   const amber = 'bg-yellow-900/40 text-yellow-400 border-yellow-900/50';
   switch (signalQuality.value) {
+    case 'unsupported': return { text: 'This browser does not support location. Try Safari or Chrome.', classes: red };
     case 'denied':      return { text: 'Location permission is denied. Enable it in Settings to play.', classes: red };
     case 'unavailable': return { text: 'Waiting for GPS signal…', classes: amber };
     case 'stale':       return { text: 'GPS signal lost — deliveries paused until it returns.', classes: amber };

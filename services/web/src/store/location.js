@@ -4,16 +4,26 @@ import { getDistanceFromLatLonInM } from './storeUtils';
 // This is a driving game: the player passes POIs and houses in a car, so we
 // want fresh fixes (a 10 s old fix is ~135 m stale at 30 mph) and we lean on
 // the reported accuracy rather than a bare distance threshold.
+//
+// The proximity numbers mirror the server's authoritative delivery check in
+// functions/index.js (DELIVERY_BASE_RADIUS_M / DELIVERY_MAX_ACCURACY_PAD_M /
+// DELIVERY_MAX_ACCURACY_M). Keep them in sync.
 
-// Fixes with accuracy worse than this are ignored for proximity decisions
-// (the delivery server rejects them too). Below it, the radius is padded by
-// the accuracy, capped, so a good fix is strict and a mediocre one is lenient.
-export const MAX_USABLE_ACCURACY_M = 150;
+// Radius within which the player counts as "at" a place, before padding.
+export const BASE_RADIUS_M = 100;
+// The radius is padded by the fix's accuracy, capped, so a good fix is strict
+// and a mediocre one is lenient.
 export const MAX_ACCURACY_PAD_M = 50;
+// Fixes with accuracy worse than this are ignored for proximity decisions
+// (the delivery server rejects them too).
+export const MAX_USABLE_ACCURACY_M = 150;
+// Once "at" a place, the player must move this much further out before we
+// say they've left — stops boundary jitter from flapping isNear*.
+export const EXIT_HYSTERESIS_M = 30;
 // Reported accuracy at or below this is shown to the player as "good".
 export const GOOD_ACCURACY_M = 50;
-// A fix older than this is treated as stale: proximity holds its last state
-// and deliveries are not attempted until a fresh fix arrives.
+// A fix older than this is treated as stale: proximity and deliveries are
+// suspended until a fresh fix arrives.
 export const FIX_STALE_MS = 15 * 1000;
 
 const WATCH_OPTIONS = {
@@ -32,15 +42,9 @@ const POIS = {
   bakery: { latitude: 40.87485155936898, longitude: -74.10014034710848 },
 };
 
-// Radius within which the player counts as "at" a POI, before accuracy padding.
-const POI_RADIUS_M = 100;
+const NOWHERE = { pizzeria: false, depot: false, bank: false, bakery: false };
 
 const state = {
-  // Kept for existing consumers; POIS above is the source of truth.
-  pizzaCoords: POIS.pizzeria,
-  depotCoords: POIS.depot,
-  bankCoords: POIS.bank,
-  bakeryCoords: POIS.bakery,
   player: {
     latitude: 0.0,
     longitude: 0.0,
@@ -49,24 +53,23 @@ const state = {
     fixedAt: null,  // epoch ms of the last fix
   },
   // Which POIs the player is currently at. Only recomputed on usable fixes,
-  // so a burst of poor-accuracy readings can't flip the Home screen around.
-  nearby: { pizzeria: false, depot: false, bank: false, bakery: false },
-  lastVisited: null,
-  // true once we've received at least one fix and permission isn't denied.
-  locationAvailable: false,
+  // so a burst of poor-accuracy readings can't flip the Home screen around;
+  // the isNear* getters additionally require a fresh, permitted fix.
+  nearby: { ...NOWHERE },
   permissionDenied: false,
   lastError: null, // { code, message, at }
   watcher: null,
   // Heartbeat so freshness getters re-evaluate even when no fix arrives
   // (Vuex getters only recompute on state changes, not wall-clock time).
   now: Date.now(),
-  thresholdDistance: POI_RADIUS_M,
 };
 
 const HEARTBEAT_MS = 5 * 1000;
 let heartbeat = null;
 
 const mutations = {
+  // A successful fix implies permission is granted and the last error is moot,
+  // so this single mutation covers all of that (fewer commits per GPS tick).
   setFix(state, { latitude, longitude, accuracy = null, speed = null, fixedAt }) {
     state.player.latitude = latitude;
     state.player.longitude = longitude;
@@ -74,19 +77,15 @@ const mutations = {
     state.player.speed = speed;
     state.player.fixedAt = fixedAt;
     state.now = fixedAt;
-  },
-  // Backwards-compatible alias used by older code/tests.
-  setLatLong(state, payload) {
-    mutations.setFix(state, { ...payload, fixedAt: Date.now() });
+    state.permissionDenied = false;
+    state.lastError = null;
   },
   setNearby(state, nearby) {
     state.nearby = nearby;
   },
-  setLocationAvailable(state, available) {
-    state.locationAvailable = available;
-  },
   setPermissionDenied(state, denied) {
     state.permissionDenied = denied;
+    if (denied) state.nearby = { ...NOWHERE };
   },
   setLastError(state, error) {
     state.lastError = error;
@@ -97,9 +96,6 @@ const mutations = {
   tick(state) {
     state.now = Date.now();
   },
-  setLastVisited(state, lastVisited) {
-    state.lastVisited = lastVisited;
-  },
 };
 
 // Accuracy-padded proximity: a good fix must be genuinely close, a mediocre
@@ -107,11 +103,14 @@ const mutations = {
 export const isWithin = (distance, radius, accuracy) =>
   distance <= radius + Math.min(accuracy ?? 0, MAX_ACCURACY_PAD_M);
 
-const computeNearby = ({ latitude, longitude, accuracy }) => {
+// Recompute the nearby map with hysteresis: entering needs the padded radius,
+// leaving needs the padded radius + EXIT_HYSTERESIS_M.
+const computeNearby = ({ latitude, longitude, accuracy }, previous) => {
   const nearby = {};
   for (const [key, poi] of Object.entries(POIS)) {
     const distance = getDistanceFromLatLonInM(latitude, longitude, poi.latitude, poi.longitude);
-    nearby[key] = isWithin(distance, POI_RADIUS_M, accuracy);
+    const radius = previous[key] ? BASE_RADIUS_M + EXIT_HYSTERESIS_M : BASE_RADIUS_M;
+    nearby[key] = isWithin(distance, radius, accuracy);
   }
   return nearby;
 };
@@ -119,7 +118,6 @@ const computeNearby = ({ latitude, longitude, accuracy }) => {
 const actions = {
   startGeolocation({ state, commit, dispatch }) {
     if (!("geolocation" in navigator)) {
-      commit('setLocationAvailable', false);
       commit('setLastError', { code: 'unsupported', message: 'Geolocation not supported', at: Date.now() });
       return;
     }
@@ -135,13 +133,10 @@ const actions = {
         fixedAt: Date.now(),
       };
       commit('setFix', fix);
-      commit('setLocationAvailable', true);
-      commit('setPermissionDenied', false);
-      commit('setLastError', null);
 
       // Only let usable fixes change where we think the player is.
       if (fix.accuracy === null || fix.accuracy <= MAX_USABLE_ACCURACY_M) {
-        commit('setNearby', computeNearby(fix));
+        commit('setNearby', computeNearby(fix, state.nearby));
       }
 
       // Trigger the distance check directly when geolocation changes
@@ -153,15 +148,10 @@ const actions = {
       commit('setLastError', { code: error.code, message: error.message, at: Date.now() });
       if (error.code === error.PERMISSION_DENIED) {
         commit('setPermissionDenied', true);
-        commit('setLocationAvailable', false);
-        return;
       }
       // TIMEOUT / POSITION_UNAVAILABLE are transient (tunnels, indoors, cold
-      // start). Keep the last fix and let the freshness getters reflect it
-      // instead of flapping the "unavailable" state on every gap.
-      if (!state.player.fixedAt) {
-        commit('setLocationAvailable', false);
-      }
+      // start). Keep the last fix; the freshness getters will report it as
+      // stale if it stays that way, without flapping on every gap.
     };
 
     const watcher = navigator.geolocation.watchPosition(onFix, onError, WATCH_OPTIONS);
@@ -180,9 +170,13 @@ const actions = {
       heartbeat = null;
     }
   },
-  // Restart the watch after the app comes back from the background: iOS
-  // (especially in a home-screen PWA) often silently stops delivering fixes.
-  restartGeolocation({ dispatch }) {
+  // Called when the app returns to the foreground. iOS (especially a
+  // home-screen PWA) often silently stops delivering fixes after
+  // backgrounding, so if the watch looks dead we recreate it. A healthy watch
+  // is left alone — tearing it down would force a GPS re-acquisition.
+  resumeGeolocation({ state, getters, dispatch }) {
+    if (state.permissionDenied) return;
+    if (state.watcher !== null && getters.hasFreshFix) return;
     dispatch('stopGeolocation');
     dispatch('startGeolocation');
   },
@@ -204,8 +198,10 @@ const getters = {
     const acc = state.player.accuracy;
     return getters.hasFreshFix && (acc === null || acc <= MAX_USABLE_ACCURACY_M);
   },
-  // Coarse signal state for the UI: 'denied' | 'unavailable' | 'stale' | 'poor' | 'weak' | 'good'
+  // Coarse signal state for the UI:
+  // 'unsupported' | 'denied' | 'unavailable' | 'stale' | 'poor' | 'weak' | 'good'
   signalQuality(state, getters) {
+    if (state.lastError?.code === 'unsupported') return 'unsupported';
     if (state.permissionDenied) return 'denied';
     if (!state.player.fixedAt) return 'unavailable';
     if (!getters.hasFreshFix) return 'stale';
@@ -214,10 +210,12 @@ const getters = {
     if (acc <= MAX_USABLE_ACCURACY_M) return 'weak';
     return 'poor';
   },
-  isNearPizzeria: (state) => state.nearby.pizzeria,
-  isNearRestaurantDepot: (state) => state.nearby.depot,
-  isNearBank: (state) => state.nearby.bank,
-  isNearBakery: (state) => state.nearby.bakery,
+  // Proximity holds its last state through a brief poor-accuracy blip, but
+  // not through a lost signal or revoked permission.
+  isNearPizzeria: (state, getters) => getters.hasFreshFix && state.nearby.pizzeria,
+  isNearRestaurantDepot: (state, getters) => getters.hasFreshFix && state.nearby.depot,
+  isNearBank: (state, getters) => getters.hasFreshFix && state.nearby.bank,
+  isNearBakery: (state, getters) => getters.hasFreshFix && state.nearby.bakery,
 };
 
 export default {

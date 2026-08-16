@@ -274,7 +274,10 @@ const store = createStore({
     }
   },
   plugins: [createPersistedState({
-    paths: ['user', 'debug_mode', 'session'] // Specify only the state you want to persist
+    paths: ['user', 'debug_mode', 'session'], // Specify only the state you want to persist
+    // The plugin re-serialises on *every* mutation; skip the high-frequency
+    // geolocation ones (several per second) since none of that is persisted.
+    filter: (mutation) => !mutation.type.startsWith('location/'),
   })],
 })
 

@@ -35,15 +35,16 @@ export default {
     this.$store.dispatch('location/startGeolocation');
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
   },
-  beforeDestroy() {
+  beforeUnmount() {
     this.$store.dispatch('location/stopGeolocation');
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);
   },
   methods: {
     handleVisibilityChange() {
       if (document.visibilityState !== 'visible') return;
-      // iOS often stops delivering fixes to a backgrounded PWA; kick the watch.
-      this.$store.dispatch('location/restartGeolocation');
+      // iOS often stops delivering fixes to a backgrounded PWA; revive the
+      // watch if it looks dead (a healthy one is left alone).
+      this.$store.dispatch('location/resumeGeolocation');
       if (this.$store.getters.hasActiveSession) {
         this.$store.dispatch('acquireWakeLock');
       }

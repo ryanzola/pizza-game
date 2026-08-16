@@ -1,5 +1,5 @@
 import { getDistanceFromLatLonInM, toMillis } from './storeUtils';
-import { isWithin } from './location';
+import { isWithin, BASE_RADIUS_M } from './location';
 import { db, functions } from '../firebase/init';
 import { collection, doc, query, where, getDocs, updateDoc, writeBatch, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -7,10 +7,9 @@ import { httpsCallable } from 'firebase/functions';
 const baseWaitTime = 30 * 60 * 1000; // 30 minutes in milliseconds
 
 // Client-side pre-check: only decides whether to *ask* the server, which
-// applies the authoritative check. Mirrors the server's formula
-// (functions/index.js: DELIVERY_BASE_RADIUS_M + min(accuracy, PAD)) so we
-// never call for a fix that can't succeed.
-const DELIVERY_BASE_RADIUS_M = 100;
+// applies the authoritative check. Uses the same radius/padding as the
+// location module (which mirrors functions/index.js) so we never call for a
+// fix that can't succeed.
 
 let queuedOrdersUnsubscribe = null;
 const deliverOrderFn = httpsCallable(functions, 'deliverOrder');
@@ -89,7 +88,7 @@ const actions = {
       let nearOrder = false;
       if (hasFix && order.latitude && order.longitude) {
         const distanceToOrder = getDistanceFromLatLonInM(latitude, longitude, order.latitude, order.longitude);
-        nearOrder = isWithin(distanceToOrder, DELIVERY_BASE_RADIUS_M, accuracy);
+        nearOrder = isWithin(distanceToOrder, BASE_RADIUS_M, accuracy);
       }
 
       if (!nearOrder && !expired) return;
