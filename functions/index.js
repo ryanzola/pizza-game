@@ -422,8 +422,9 @@ exports.generateOrderBatch = onCall(
 // accuracy (capped so a wildly inaccurate fix can't reach across the street).
 const DELIVERY_BASE_RADIUS_M = 100;
 const DELIVERY_MAX_ACCURACY_PAD_M = 50;
-// Largest radius the server will ever accept. The web client's pre-check
-// (services/web/src/store/orders.js DELIVERY_PRECHECK_RADIUS_M) must match.
+// Largest radius the server will ever accept. The web client mirrors these
+// numbers in services/web/src/store/location.js (BASE_RADIUS_M,
+// MAX_ACCURACY_PAD_M, MAX_USABLE_ACCURACY_M) — keep them in sync.
 const DELIVERY_MAX_RADIUS_M = DELIVERY_BASE_RADIUS_M + DELIVERY_MAX_ACCURACY_PAD_M;
 // Fixes worse than this are too vague to prove the player was at the house.
 const DELIVERY_MAX_ACCURACY_M = 150;

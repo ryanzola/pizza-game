@@ -40,8 +40,8 @@
     <div class="flex-1 overflow-y-auto flex flex-col relative">
       <DebugLocation v-if="!isNearBakery && !isNearRestaurantDepot" class="px-4 mt-4 shrink-0" />
       
-      <p class="text-center font-semibold bg-red-900/40 text-red-400 py-3 mx-4 mt-4 rounded-xl border border-red-900/50 shrink-0" v-show="!locationAvailable">
-        Geolocation is not available or not permitted.
+      <p v-if="signalBanner" :class="signalBanner.classes" class="text-center font-semibold py-3 mx-4 mt-4 rounded-xl border shrink-0">
+        {{ signalBanner.text }}
       </p>
 
       <!-- Dynamic Views Orchestration -->
@@ -82,7 +82,21 @@ const loading = ref(true);
 const session = computed(() => store.state.session);
 const version = computed(() => store.state.version);
 const waitTime = computed(() => store.state.orders.waitTime);
-const locationAvailable = computed(() => store.state.location.locationAvailable);
+const signalQuality = computed(() => store.getters['location/signalQuality']);
+
+// Only shown when the player should know their fixes aren't usable.
+const signalBanner = computed(() => {
+  const red = 'bg-red-900/40 text-red-400 border-red-900/50';
+  const amber = 'bg-yellow-900/40 text-yellow-400 border-yellow-900/50';
+  switch (signalQuality.value) {
+    case 'unsupported': return { text: 'This browser does not support location. Try Safari or Chrome.', classes: red };
+    case 'denied':      return { text: 'Location permission is denied. Enable it in Settings to play.', classes: red };
+    case 'unavailable': return { text: 'Waiting for GPS signal…', classes: amber };
+    case 'stale':       return { text: 'GPS signal lost — deliveries paused until it returns.', classes: amber };
+    case 'poor':        return { text: 'GPS signal weak — deliveries may not register.', classes: amber };
+    default:            return null;
+  }
+});
 
 // Getters mapped from location module
 const isNearPizzeria = computed(() => store.getters['location/isNearPizzeria']);
