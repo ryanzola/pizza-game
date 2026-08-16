@@ -22,17 +22,31 @@ export default {
     InstallPrompt
   },
   computed: {
-    ...mapState(['user'])
+    ...mapState(['user']),
+    hasActiveSession() {
+      return this.$store.getters.hasActiveSession;
+    },
+    // Signed out: no GPS. Signed in but idle: cheap coarse watch (enough to
+    // notice a POI). Active session: high-accuracy tracking for deliveries.
+    geolocationMode() {
+      if (!this.user) return 'off';
+      return this.hasActiveSession ? 'active' : 'idle';
+    }
   },
   watch: {
     user(newUser) {
       if (!newUser && this.$route.meta.requiresAuth) {
         this.$router.push('/signin');
       }
+    },
+    geolocationMode: {
+      immediate: true,
+      handler(mode) {
+        this.$store.dispatch('location/setMode', mode);
+      }
     }
   },
   async mounted() {
-    this.$store.dispatch('location/startGeolocation');
     this.$store.dispatch('orders/startExpiryTimer');
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
   },

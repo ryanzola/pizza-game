@@ -24,16 +24,33 @@ export const EXIT_HYSTERESIS_M = 30;
 // Reported accuracy at or below this is shown to the player as "good".
 export const GOOD_ACCURACY_M = 50;
 // A fix older than this is treated as stale: proximity and deliveries are
-// suspended until a fresh fix arrives.
-export const FIX_STALE_MS = 15 * 1000;
+// suspended until a fresh fix arrives. Per mode, because idle mode polls
+// slowly on purpose (nothing time-critical happens without a session).
+export const FIX_STALE_MS = {
+  idle: 90 * 1000,
+  active: 15 * 1000,
+};
 
-const WATCH_OPTIONS = {
-  enableHighAccuracy: true,
-  // How long the browser may take to produce a fix before reporting TIMEOUT.
-  // Generous: a timeout is not fatal (see onError), it just means "no fix yet".
-  timeout: 20 * 1000,
-  // Never accept a cached fix older than this.
-  maximumAge: 2 * 1000,
+// Power modes. GPS is the biggest battery cost in the app, so we only run
+// high-accuracy tracking while a delivery session is active; signed-in-but-
+// idle players get a coarse, cheap watch (enough to flip the Home screen at
+// a POI), and signed-out users get nothing.
+export const MODES = {
+  off: null,
+  idle: {
+    enableHighAccuracy: false,
+    timeout: 30 * 1000,
+    maximumAge: 30 * 1000,
+  },
+  active: {
+    enableHighAccuracy: true,
+    // How long the browser may take to produce a fix before reporting
+    // TIMEOUT. Generous: a timeout is not fatal (see onError).
+    timeout: 20 * 1000,
+    // Never accept a cached fix older than this (a 10 s old fix is ~135 m
+    // stale at 30 mph).
+    maximumAge: 2 * 1000,
+  },
 };
 
 // Fixed game locations, shared with Cloud Functions (single source of truth).
@@ -61,6 +78,7 @@ const state = {
   permissionDenied: false,
   lastError: null, // { code, message, at }
   watcher: null,
+  mode: 'off', // 'off' | 'idle' | 'active' — see MODES
   // Heartbeat so freshness getters re-evaluate even when no fix arrives
   // (Vuex getters only recompute on state changes, not wall-clock time).
   now: Date.now(),
@@ -95,6 +113,9 @@ const mutations = {
   setWatcher(state, watcher) {
     state.watcher = watcher;
   },
+  setMode(state, mode) {
+    state.mode = mode;
+  },
   tick(state) {
     state.now = Date.now();
   },
@@ -118,11 +139,20 @@ const computeNearby = ({ latitude, longitude, accuracy }, previous) => {
 };
 
 const actions = {
+  // Set the tracking mode; (re)creates the watch when the mode changes.
+  setMode({ state, commit, dispatch }, mode) {
+    if (!(mode in MODES)) throw new Error(`Unknown geolocation mode '${mode}'`);
+    if (mode === state.mode && (mode === 'off' || state.watcher !== null)) return;
+    dispatch('stopGeolocation');
+    commit('setMode', mode);
+    if (mode !== 'off') dispatch('startGeolocation');
+  },
   startGeolocation({ state, commit, dispatch }) {
     if (!("geolocation" in navigator)) {
       commit('setLastError', { code: 'unsupported', message: 'Geolocation not supported', at: Date.now() });
       return;
     }
+    if (state.mode === 'off') return;
     if (state.watcher !== null) return; // already watching
 
     const onFix = (position) => {
@@ -156,7 +186,7 @@ const actions = {
       // stale if it stays that way, without flapping on every gap.
     };
 
-    const watcher = navigator.geolocation.watchPosition(onFix, onError, WATCH_OPTIONS);
+    const watcher = navigator.geolocation.watchPosition(onFix, onError, MODES[state.mode]);
     commit('setWatcher', watcher);
     if (heartbeat === null) {
       heartbeat = setInterval(() => commit('tick'), HEARTBEAT_MS);
@@ -177,7 +207,7 @@ const actions = {
   // backgrounding, so if the watch looks dead we recreate it. A healthy watch
   // is left alone — tearing it down would force a GPS re-acquisition.
   resumeGeolocation({ state, getters, dispatch }) {
-    if (state.permissionDenied) return;
+    if (state.mode === 'off' || state.permissionDenied) return;
     if (state.watcher !== null && getters.hasFreshFix) return;
     dispatch('stopGeolocation');
     dispatch('startGeolocation');
@@ -193,7 +223,7 @@ const getters = {
     return state.player.fixedAt ? state.now - state.player.fixedAt : Infinity;
   },
   hasFreshFix(state, getters) {
-    return getters.fixAge <= FIX_STALE_MS;
+    return getters.fixAge <= (FIX_STALE_MS[state.mode] ?? FIX_STALE_MS.active);
   },
   // Can the current fix be used for proximity/delivery decisions?
   hasUsableFix(state, getters) {
