@@ -8,7 +8,28 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read, write: if isAuth() && request.auth.uid == userId;
+      allow read: if isAuth() && request.auth.uid == userId;
+
+      // Profile is created client-side on first sign-in with zero balances.
+      allow create: if isAuth() && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['email', 'name', 'picture', 'bank_amount', 'savings_amount'])
+        && request.resource.data.bank_amount == 0
+        && request.resource.data.savings_amount == 0;
+
+      // Clients may only touch profile fields. Money (bank_amount,
+      // savings_amount, last_deposit) is written exclusively by Cloud
+      // Functions: tips via processOrderAchievements, deposits via depositBank.
+      allow update: if isAuth() && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['email', 'name', 'picture']);
+
+      allow delete: if false;
+
+      // FCM registration tokens for push notifications.
+      match /tokens/{tokenId} {
+        allow read, delete: if isAuth() && request.auth.uid == userId;
+        allow create, update: if isAuth() && request.auth.uid == userId
+          && request.resource.data.keys().hasOnly(['token', 'updated_at']);
+      }
 
       // Allow users to freely read their achievements and stats and updates.
       match /achievements/{achievementId} {

@@ -1,9 +1,12 @@
 import { createStore } from 'vuex'
 import { signOut } from "firebase/auth";
-import { auth, db } from '../firebase/init'
+import { auth, db, functions } from '../firebase/init'
 import { doc, getDoc, updateDoc, collection, addDoc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { initMessaging } from '../firebase/init';
 import { getToken, onMessage } from "firebase/messaging";
+import { httpsCallable } from "firebase/functions";
+
+const depositBankFn = httpsCallable(functions, 'depositBank');
 
 import location from './location';
 import orders from './orders';
@@ -168,25 +171,26 @@ const store = createStore({
         throw error
       }
     },
-    async update_savings({ commit, state }) {
+    // Move carried cash into savings. The server verifies we're at the bank
+    // and is the only thing allowed to change balances. Resolves to
+    // { success, reason?, deposited? }; throws on hard errors.
+    async update_savings({ commit, state, rootState }) {
+      if (!state.user?.uid) return { success: false, reason: 'not_signed_in' };
+      const { latitude, longitude, accuracy } = rootState.location.player;
       try {
-        if (!state.user?.uid) return;
-
-        const currentBank = state.user.bank_amount || 0;
-        const currentSavings = state.user.savings_amount || 0;
-        const newSavings = parseFloat((currentSavings + currentBank).toFixed(2));
-
-        const userRef = doc(db, 'users', state.user.uid);
-        await updateDoc(userRef, {
-          savings_amount: newSavings,
-          bank_amount: 0
-        });
-
-        commit('SET_SAVINGS', newSavings);
-        commit('SET_BANK', 0);
+        const { data } = await depositBankFn({ latitude, longitude, accuracy });
+        if (data?.success) {
+          commit('SET_SAVINGS', data.savings_amount);
+          commit('SET_BANK', data.bank_amount);
+        } else if (data?.reason === 'nothing_to_deposit') {
+          // Local state was stale; sync to what the server has.
+          commit('SET_SAVINGS', data.savings_amount ?? state.user.savings_amount);
+          commit('SET_BANK', data.bank_amount ?? 0);
+        }
+        return data;
       } catch (error) {
         console.error('Failed to deposit:', error)
-        throw error // or handle it differently if needed
+        throw error
       }
     },
     async fetchBank({ commit, state }) {
@@ -201,24 +205,6 @@ const store = createStore({
       } catch (error) {
         console.error('Failed to fetch bank:', error)
         throw error
-      }
-    },
-    async update_bank({ commit, state }, tip) {
-      try {
-        if (!state.user?.uid) return;
-
-        const currentBank = state.user.bank_amount || 0;
-        const newBank = parseFloat((currentBank + tip).toFixed(2));
-
-        const userRef = doc(db, 'users', state.user.uid);
-        await updateDoc(userRef, {
-          bank_amount: newBank
-        });
-
-        commit('SET_BANK', newBank);
-      } catch (error) {
-        console.error('Failed to withdraw:', error)
-        throw error // or handle it differently if needed
       }
     },
     async start_session({ commit, state }) {
