@@ -246,8 +246,6 @@ const getRandomOrderFromGemini = async (familySize) => {
   }
 };
 
-const functionsV1 = require("firebase-functions/v1");
-
 exports.generateOrder = onCall(
   { secrets: [geminiApiKey, googleApiKey] },
   async (request) => {
