@@ -2,10 +2,12 @@ importScripts('https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js'
 importScripts('https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging-compat.js');
 
 firebase.initializeApp({
-  apiKey: "AIzaSyDuA1-gF45FSpuc4VbxJWqoGEccJ3TR6K8",
+  apiKey: "AIzaSyAt-LEsMNIq5bKsRTPLz5qfoi416mGxTug",
+  authDomain: "pizzamango-376923.firebaseapp.com",
   projectId: "pizzamango-376923",
+  storageBucket: "pizzamango-376923.firebasestorage.app",
   messagingSenderId: "778990538357",
-  appId: "1:778990538357:web:4cdf9eb1392cc4a621f23c",
+  appId: "1:778990538357:web:524e0af35328155921f23c",
 });
 
 const messaging = firebase.messaging();

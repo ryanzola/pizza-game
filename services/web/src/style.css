@@ -38,12 +38,16 @@ img {
 }
 
 body {
-  @apply min-w-[375px] h-screen;
+  @apply min-w-[375px];
+  height: 100vh;
+  height: 100dvh;
   padding-top: env(safe-area-inset-top);
 }
 
 #app {
-  @apply h-[calc(100vh-88px)] mb-[88px];
+  height: calc(100vh - 88px - env(safe-area-inset-top));
+  height: calc(100dvh - 88px - env(safe-area-inset-top));
+  @apply mb-[88px];
 }
 
 h1 {
