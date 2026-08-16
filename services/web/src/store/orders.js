@@ -1,20 +1,23 @@
-import { getDistanceFromLatLonInM, toMillis } from './storeUtils';
+import { getDistanceFromLatLonInM } from './storeUtils';
 import { isWithin, BASE_RADIUS_M } from './location';
 import { db, functions } from '../firebase/init';
-import { collection, doc, query, where, getDocs, updateDoc, writeBatch, onSnapshot } from 'firebase/firestore';
+import { collection, doc, query, where, getDocs, writeBatch, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 
+// Wait-time display only. Expiry itself is decided by Cloud Functions
+// (functions/index.js expireOrders / sweepExpiredOrders) with the same
+// formula; keep the two in sync.
 const baseWaitTime = 30 * 60 * 1000; // 30 minutes in milliseconds
-
-// Client-side pre-check: only decides whether to *ask* the server, which
-// applies the authoritative check. Uses the same radius/padding as the
-// location module (which mirrors functions/index.js) so we never call for a
-// fix that can't succeed.
+// How often to ask the server to expire our stale orders while the app is
+// in the foreground. A scheduled sweep covers backgrounded/offline phones.
+const EXPIRY_CHECK_MS = 60 * 1000;
 
 let queuedOrdersUnsubscribe = null;
+let expiryTimer = null;
 const deliverOrderFn = httpsCallable(functions, 'deliverOrder');
-// Order ids with an in-flight status update, so a burst of GPS ticks doesn't
-// fire duplicate requests for the same order.
+const expireOrdersFn = httpsCallable(functions, 'expireOrders');
+// Order ids with an in-flight delivery request, so a burst of GPS ticks
+// doesn't fire duplicate requests for the same order.
 const inFlight = new Set();
 
 const state = {
@@ -62,58 +65,41 @@ const mutations = {
 }
 
 const actions = {
+  // Runs on every GPS fix: asks the server to deliver any selected order the
+  // player is passing. Expiry is handled separately by expireOrders.
   checkAndUpdateOrderStatus({ state, commit, dispatch, rootState, rootGetters }) {
-    // only orders with status of 'pending' or 'en_route' are checked
-    const filteredOrders = state.selected_orders.filter(order => ['pending', 'en_route'].includes(order.status));
+    const activeOrders = state.selected_orders.filter(order => ['pending', 'en_route'].includes(order.status));
+
+    // Wait-time shown on Home; mirrors the server's expiry formula.
     const multiplier = 1.1;
-
-    const additionalWaitTime = filteredOrders.length > 6
-      ? baseWaitTime * (filteredOrders.length - 6) * multiplier
+    const additionalWaitTime = activeOrders.length > 6
+      ? baseWaitTime * (activeOrders.length - 6) * multiplier
       : 0;
+    state.waitTime = baseWaitTime + additionalWaitTime;
 
-    const totalWaitTime = baseWaitTime + additionalWaitTime;
-    const cancellationTime = totalWaitTime + baseWaitTime;
-
-    state.waitTime = totalWaitTime;
-
-    const { latitude, longitude, accuracy } = rootState.location.player;
     // Fresh and accurate enough to be worth sending to the server.
-    const hasFix = rootGetters['location/hasUsableFix'];
+    if (!rootGetters['location/hasUsableFix']) return;
+    const { latitude, longitude, accuracy } = rootState.location.player;
 
-    filteredOrders.forEach(async order => {
+    activeOrders.forEach(async order => {
       if (inFlight.has(order.id)) return;
+      if (!order.latitude || !order.longitude) return;
 
-      const expired = Date.now() - toMillis(order.date_placed) > cancellationTime;
-
-      let nearOrder = false;
-      if (hasFix && order.latitude && order.longitude) {
-        const distanceToOrder = getDistanceFromLatLonInM(latitude, longitude, order.latitude, order.longitude);
-        nearOrder = isWithin(distanceToOrder, BASE_RADIUS_M, accuracy);
-      }
-
-      if (!nearOrder && !expired) return;
+      const distanceToOrder = getDistanceFromLatLonInM(latitude, longitude, order.latitude, order.longitude);
+      if (!isWithin(distanceToOrder, BASE_RADIUS_M, accuracy)) return;
 
       inFlight.add(order.id);
       try {
-        let delivered = false;
-        if (nearOrder) {
-          // The server verifies position and marks the order delivered.
-          const { data } = await deliverOrderFn({ orderId: order.id, latitude, longitude, accuracy });
-          delivered = Boolean(data?.success);
-          if (delivered) {
-            commit('UPDATE_ORDER_STATUS', { orderId: order.id, status: 'delivered' });
-          } else if (data?.reason && data.reason !== 'too_far') {
-            // too_far is routine at the edge of the pre-check radius; log the rest.
-            console.warn(`Delivery for ${order.id} not accepted: ${data.reason}`, data);
-          }
-        }
-        // An expired order the server wouldn't accept still gets cancelled.
-        if (!delivered && expired) {
-          await updateDoc(doc(db, 'orders', order.id), { status: 'cancelled' });
-          commit('UPDATE_ORDER_STATUS', { orderId: order.id, status: 'cancelled' });
+        // The server verifies position and marks the order delivered.
+        const { data } = await deliverOrderFn({ orderId: order.id, latitude, longitude, accuracy });
+        if (data?.success) {
+          commit('UPDATE_ORDER_STATUS', { orderId: order.id, status: 'delivered' });
+        } else if (data?.reason && data.reason !== 'too_far') {
+          // too_far is routine at the edge of the pre-check radius; log the rest.
+          console.warn(`Delivery for ${order.id} not accepted: ${data.reason}`, data);
         }
       } catch (error) {
-        console.error('Failed to update order status:', error);
+        console.error('Failed to deliver order:', error);
         // The server says this order isn't ours / isn't deliverable any more:
         // our local copy is stale, so resync instead of retrying every GPS tick.
         if (['functions/failed-precondition', 'functions/not-found', 'functions/permission-denied'].includes(error?.code)) {
@@ -123,6 +109,31 @@ const actions = {
         inFlight.delete(order.id);
       }
     });
+  },
+  // Ask the server to cancel any of our orders that have been held too long.
+  // Server-authoritative; we just reflect the result locally.
+  async expireOrders({ state, commit, rootState }) {
+    if (!rootState.user?.uid) return;
+    if (!state.selected_orders.some(o => ['pending', 'en_route'].includes(o.status))) return;
+    try {
+      const { data } = await expireOrdersFn();
+      for (const orderId of data?.cancelled ?? []) {
+        commit('UPDATE_ORDER_STATUS', { orderId, status: 'cancelled' });
+      }
+    } catch (error) {
+      console.error('Failed to expire orders:', error);
+    }
+  },
+  startExpiryTimer({ dispatch }) {
+    if (expiryTimer !== null) return;
+    expiryTimer = setInterval(() => dispatch('expireOrders'), EXPIRY_CHECK_MS);
+    dispatch('expireOrders');
+  },
+  stopExpiryTimer() {
+    if (expiryTimer !== null) {
+      clearInterval(expiryTimer);
+      expiryTimer = null;
+    }
   },
   listenToQueuedOrders({ commit }) {
     if (queuedOrdersUnsubscribe) return; // Already listening

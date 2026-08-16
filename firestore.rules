@@ -46,20 +46,16 @@ service cloud.firestore {
       // Allow creating unassigned orders 
       allow create: if isAuth() && request.resource.data.user_id == null;
 
-      // Allow users to update an order IF:
-      // 1. They are claiming a currently unassigned order
-      // 2. They already own the order and are updating its status
-      // Marking an order 'delivered' is reserved for the deliverOrder Cloud
-      // Function, which verifies the player's location server-side. Delivered
-      // orders are final: clients can't move them back to re-deliver.
+      // The only client-side update is claiming a queued, unassigned order
+      // (status -> en_route, user_id -> me). Every other status change
+      // (delivered, cancelled/expired) is made by Cloud Functions, which
+      // verify location / timing server-side.
       allow update: if isAuth()
-        && resource.data.status != 'delivered'
-        && request.resource.data.status != 'delivered'
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['date_delivered', 'delivered_at'])
-        && (
-          (resource.data.user_id == null && request.resource.data.user_id == request.auth.uid) ||
-          (resource.data.user_id == request.auth.uid && request.resource.data.user_id == request.auth.uid)
-        );
+        && resource.data.user_id == null
+        && resource.data.status == 'queued'
+        && request.resource.data.user_id == request.auth.uid
+        && request.resource.data.status == 'en_route'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['user_id', 'status']);
 
       // Allow deleting queued, unclaimed orders (simulates other drivers taking them)
       allow delete: if isAuth() && resource.data.status == 'queued' && resource.data.user_id == null;

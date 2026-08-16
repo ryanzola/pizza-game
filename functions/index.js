@@ -4,6 +4,7 @@ const axios = require("axios");
 const { GoogleGenAI } = require("@google/genai");
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { onCall } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { defineSecret } = require("firebase-functions/params");
 
 const googleApiKey = defineSecret("GOOGLE_API_KEY");
@@ -592,6 +593,96 @@ exports.deliverOrder = onCall(async (request) => {
     console.error('deliverOrder failed:', error);
     throw new functions.https.HttpsError('internal', 'Failed to deliver order.');
   }
+});
+
+// ---------------------------------------------------------------------------
+// Order expiry
+// ---------------------------------------------------------------------------
+// An order the driver holds too long is cancelled. The allowance grows with
+// the number of orders they're juggling (mirrors the client's wait-time
+// display in services/web/src/store/orders.js). Expiry is decided here, not
+// on the phone: the client's timers stop when the PWA is backgrounded, and
+// clients can't write order status directly (see firestore.rules).
+const ORDER_BASE_WAIT_MS = 30 * 60 * 1000;
+const ORDER_EXTRA_WAIT_MULTIPLIER = 1.1;
+const ORDER_EXTRA_WAIT_THRESHOLD = 6;
+
+const cancellationWindowMs = (activeCount) => {
+  const extra = activeCount > ORDER_EXTRA_WAIT_THRESHOLD
+    ? ORDER_BASE_WAIT_MS * (activeCount - ORDER_EXTRA_WAIT_THRESHOLD) * ORDER_EXTRA_WAIT_MULTIPLIER
+    : 0;
+  return ORDER_BASE_WAIT_MS + extra + ORDER_BASE_WAIT_MS;
+};
+
+// Cancel expired orders among `orders` (docs for ONE user, all active).
+// Returns the ids cancelled.
+const expireUserOrders = async (uid, orderDocs, now) => {
+  const window = cancellationWindowMs(orderDocs.length);
+  const expired = orderDocs.filter((d) => {
+    const placed = tsToMillis(d.get('date_placed'));
+    return placed !== null && now - placed > window;
+  });
+  if (expired.length === 0) return [];
+
+  const batch = db.batch();
+  for (const d of expired) {
+    batch.update(d.ref, {
+      status: 'cancelled',
+      cancelled_at: admin.firestore.FieldValue.serverTimestamp(),
+      cancel_reason: 'expired'
+    });
+  }
+  await batch.commit();
+  console.log(`Expired ${expired.length} order(s) for ${uid}`);
+  return expired.map((d) => d.id);
+};
+
+const activeOrdersQuery = () =>
+  db.collection('orders').where('status', 'in', ['pending', 'en_route']);
+
+/**
+ * expireOrders() — called by the client on a timer / on resume so expiry
+ * shows up promptly. Only touches the caller's own orders.
+ * Returns { cancelled: [orderId, ...] }.
+ */
+exports.expireOrders = onCall(async (request) => {
+  if (!request.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'You must be logged in.');
+  }
+  const uid = request.auth.uid;
+  try {
+    const snap = await activeOrdersQuery().where('user_id', '==', uid).get();
+    const cancelled = await expireUserOrders(uid, snap.docs, Date.now());
+    return { cancelled };
+  } catch (error) {
+    console.error('expireOrders failed:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to expire orders.');
+  }
+});
+
+/**
+ * Safety net for phones that are asleep / offline: sweep every user's active
+ * orders on a schedule.
+ */
+exports.sweepExpiredOrders = onSchedule('every 10 minutes', async () => {
+  const snap = await activeOrdersQuery().get();
+  const byUser = new Map();
+  for (const d of snap.docs) {
+    const uid = d.get('user_id');
+    if (!uid) continue; // queued/unclaimed orders never expire here
+    if (!byUser.has(uid)) byUser.set(uid, []);
+    byUser.get(uid).push(d);
+  }
+  const now = Date.now();
+  let total = 0;
+  for (const [uid, docs] of byUser) {
+    try {
+      total += (await expireUserOrders(uid, docs, now)).length;
+    } catch (error) {
+      console.error(`sweepExpiredOrders failed for ${uid}:`, error);
+    }
+  }
+  console.log(`sweepExpiredOrders: cancelled ${total} order(s) across ${byUser.size} user(s)`);
 });
 
 // Background function to process delivered orders and award achievements
