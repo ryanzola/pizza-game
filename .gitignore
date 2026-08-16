@@ -39,3 +39,5 @@ certs/
 
 # Agent config
 .agents/
+# Claude Code local config
+.claude/

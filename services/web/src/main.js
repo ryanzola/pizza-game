@@ -11,8 +11,22 @@ import './style.css'
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/service-worker.js').then(function (registration) {
     console.log('Service Worker registered with scope:', registration.scope);
+
+    // Check for updates every 60 seconds
+    setInterval(() => {
+      registration.update();
+    }, 60 * 1000);
   }).catch(function (error) {
     console.log('Service Worker registration failed:', error);
+  });
+
+  // Reload when a new service worker takes over
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!refreshing) {
+      refreshing = true;
+      window.location.reload();
+    }
   });
 }
 
