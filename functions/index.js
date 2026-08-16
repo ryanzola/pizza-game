@@ -677,6 +677,66 @@ exports.deliverOrder = onCall(async (request) => {
 });
 
 // ---------------------------------------------------------------------------
+// Bank deposits
+// ---------------------------------------------------------------------------
+/**
+ * depositBank({ latitude, longitude, accuracy })
+ *
+ * Moves the player's carried cash (bank_amount) into savings_amount. Only the
+ * server may change balances (see firestore.rules); the client sends its
+ * position and we check it against the bank POI with the same padded radius
+ * used for deliveries.
+ *
+ * Returns { success: true, deposited, bank_amount, savings_amount } or
+ * { success: false, reason: 'too_far' | 'poor_accuracy' | 'nothing_to_deposit' }.
+ */
+exports.depositBank = onCall(async (request) => {
+  if (!request.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'You must be logged in.');
+  }
+  const uid = request.auth.uid;
+  const { latitude, longitude, accuracy } = request.data || {};
+
+  if (!isFiniteNumber(latitude) || !isFiniteNumber(longitude) ||
+      latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+    throw new functions.https.HttpsError('invalid-argument', 'A valid latitude/longitude is required.');
+  }
+  const acc = isFiniteNumber(accuracy) && accuracy >= 0 ? accuracy : null;
+  if (acc !== null && acc > DELIVERY_MAX_ACCURACY_M) {
+    return { success: false, reason: 'poor_accuracy', accuracy: acc };
+  }
+
+  const distance = haversineMeters(latitude, longitude, POIS.bank.latitude, POIS.bank.longitude);
+  const radius = DELIVERY_BASE_RADIUS_M + Math.min(acc ?? 0, DELIVERY_MAX_ACCURACY_PAD_M);
+  if (distance > radius) {
+    return { success: false, reason: 'too_far', distance, radius };
+  }
+
+  const userRef = db.collection('users').doc(uid);
+  try {
+    return await db.runTransaction(async (tx) => {
+      const snap = await tx.get(userRef);
+      const data = snap.exists ? snap.data() : {};
+      const bank = Number(data.bank_amount) || 0;
+      const savings = Number(data.savings_amount) || 0;
+      if (bank <= 0) {
+        return { success: false, reason: 'nothing_to_deposit', bank_amount: bank, savings_amount: savings };
+      }
+      const newSavings = parseFloat((savings + bank).toFixed(2));
+      tx.set(userRef, {
+        bank_amount: 0,
+        savings_amount: newSavings,
+        last_deposit: { amount: bank, at: admin.firestore.FieldValue.serverTimestamp() }
+      }, { merge: true });
+      return { success: true, deposited: bank, bank_amount: 0, savings_amount: newSavings };
+    });
+  } catch (error) {
+    console.error('depositBank failed:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to deposit.');
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Order expiry
 // ---------------------------------------------------------------------------
 // An order the driver holds too long is cancelled. The allowance grows with

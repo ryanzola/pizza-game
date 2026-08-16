@@ -67,11 +67,14 @@
           class="action-btn text-white transition-all duration-200"
           :class="bank_amount > 0 ? 'bg-green-500 hover:bg-green-600 active:bg-green-700 shadow-[0_0_15px_rgba(34,197,94,0.3)]' : 'bg-gray-700 opacity-50 cursor-not-allowed'"
           @click="deposit"
-          :disabled="bank_amount <= 0"
+          :disabled="bank_amount <= 0 || depositing"
         >
           <span class="font-bold text-lg">Deposit Funds</span>
         </button>
-        <div v-else class="action-btn bg-[#2c2c2e] text-gray-400 border border-gray-700 flex items-center justify-center cursor-not-allowed">
+        <p v-if="depositMessage" class="text-center text-sm font-semibold" :class="depositMessage.error ? 'text-red-400' : 'text-green-400'">
+          {{ depositMessage.text }}
+        </p>
+        <div v-if="!(debug_mode || isNearBank)" class="action-btn bg-[#2c2c2e] text-gray-400 border border-gray-700 flex items-center justify-center cursor-not-allowed">
           <span class="font-semibold text-base">Travel to bank to deposit</span>
         </div>
       </div>
@@ -81,7 +84,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useStore } from 'vuex';
 import DebugLocation from "../components/DebugLocation.vue";
 
@@ -103,11 +106,29 @@ onMounted(async () => {
 });
 
 // Methods
-const deposit = () => {
-  if (bank_amount.value > 0) {
-    store.dispatch('update_savings');
-  } else {
-    console.warn('ya broke!');
+const depositMessage = ref(null);
+const depositing = ref(false);
+const deposit = async () => {
+  if (bank_amount.value <= 0 || depositing.value) return;
+  depositing.value = true;
+  depositMessage.value = null;
+  try {
+    const result = await store.dispatch('update_savings');
+    if (result?.success) {
+      depositMessage.value = { text: `Deposited $${Number(result.deposited).toFixed(2)}`, error: false };
+    } else {
+      const reasons = {
+        too_far: "You're not close enough to the bank.",
+        poor_accuracy: 'GPS signal too weak to confirm you\'re at the bank.',
+        nothing_to_deposit: 'Nothing to deposit.',
+      };
+      depositMessage.value = { text: reasons[result?.reason] || 'Deposit not accepted.', error: true };
+    }
+  } catch (e) {
+    depositMessage.value = { text: 'Deposit failed. Try again.', error: true };
+  } finally {
+    depositing.value = false;
+    setTimeout(() => { depositMessage.value = null; }, 4000);
   }
 };
 </script>
