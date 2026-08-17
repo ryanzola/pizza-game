@@ -13,7 +13,10 @@ const state = {
     total_tips: 0
   },
   recent_achievement: null, // For displaying the overlay
-  showOverlay: false
+  showOverlay: false,
+  // Unlocks waiting to be announced. The server can award several in one
+  // transaction, so they're shown one after another.
+  overlayQueue: []
 };
 
 const mutations = {
@@ -23,9 +26,12 @@ const mutations = {
   SET_LIFETIME_STATS(state, stats) {
     state.lifetime_stats = stats;
   },
-  SHOW_ACHIEVEMENT_OVERLAY(state, achievement) {
-    state.recent_achievement = achievement;
-    state.showOverlay = true;
+  ENQUEUE_ACHIEVEMENT_OVERLAYS(state, achievements) {
+    state.overlayQueue.push(...achievements);
+  },
+  SHOW_NEXT_ACHIEVEMENT_OVERLAY(state) {
+    state.recent_achievement = state.overlayQueue.shift() ?? null;
+    state.showOverlay = state.recent_achievement !== null;
   },
   HIDE_ACHIEVEMENT_OVERLAY(state) {
     state.showOverlay = false;
@@ -64,7 +70,8 @@ const actions = {
       if (currentIds.length > 0) { // Not initial load
         const newAchievements = fullList.filter(a => !currentIds.includes(a.id));
         if (newAchievements.length > 0) {
-          commit('SHOW_ACHIEVEMENT_OVERLAY', newAchievements[0]); // Show the first new one
+          commit('ENQUEUE_ACHIEVEMENT_OVERLAYS', newAchievements);
+          if (!state.showOverlay) commit('SHOW_NEXT_ACHIEVEMENT_OVERLAY');
         }
       }
 
@@ -91,8 +98,12 @@ const actions = {
     }
   },
 
-  dismissAchievementOverlay({ commit }) {
+  dismissAchievementOverlay({ commit, state }) {
     commit('HIDE_ACHIEVEMENT_OVERLAY');
+    // Let the leave transition finish before announcing the next unlock.
+    if (state.overlayQueue.length > 0) {
+      setTimeout(() => commit('SHOW_NEXT_ACHIEVEMENT_OVERLAY'), 600);
+    }
   }
 };
 
