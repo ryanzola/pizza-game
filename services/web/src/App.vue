@@ -3,6 +3,7 @@
     <router-view/>
   </main>
   <Navbar v-if="$store.getters.isAuthenticated" />
+  <DeliveryCelebration />
   <AchievementOverlay />
   <InstallPrompt />
 </template>
@@ -11,6 +12,7 @@
 import Navbar from "./components/Navbar.vue";
 import Signin from "./views/Signin.vue";
 import AchievementOverlay from "./components/AchievementOverlay.vue";
+import DeliveryCelebration from "./components/DeliveryCelebration.vue";
 import InstallPrompt from "./components/InstallPrompt.vue";
 import { mapState } from 'vuex'
 
@@ -19,6 +21,7 @@ export default {
     Navbar,
     Signin,
     AchievementOverlay,
+    DeliveryCelebration,
     InstallPrompt
   },
   computed: {
