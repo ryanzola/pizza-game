@@ -57,6 +57,116 @@ const getScaledMax = (baseMax, multiplier) => {
 admin.initializeApp();
 const db = admin.firestore();
 
+// ---------------------------------------------------------------------------
+// Achievements
+// ---------------------------------------------------------------------------
+// The catalog (shared with the web client) declares each achievement as a
+// threshold on a field of users/{uid}/stats/lifetime. Any code path that
+// changes those stats (delivery, bank deposit, restock) calls
+// evaluateAchievements() inside its transaction to unlock whatever is newly
+// reached, so a stat that crossed a threshold in the past is still awarded
+// on the next event.
+const ACHIEVEMENTS = require("./data/achievements.json").achievements;
+
+const NIGHT_OWL_TZ = 'America/New_York';
+const NIGHT_OWL_END_HOUR = 4; // deliveries at 00:00–03:59 local count
+
+const localHour = (date, timeZone) =>
+  Number(new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', hourCycle: 'h23' }).format(date));
+
+// Leading count on a Gemini order line ("2 18\" Cheese Pizzas" -> 2, else 1).
+// A leading number that is part of the menu name ("2 Liter Soda",
+// "20 oz. Soda", "18 inch ...") is a size, not a count.
+const MAX_PLAUSIBLE_ITEM_QTY = 20;
+const itemQuantity = (item) => {
+  const m = /^\s*(\d+)\s*x?\s+(?!(?:liter|litre|oz\b|ounce|inch|in\b|"))/i.exec(String(item));
+  const n = m ? parseInt(m[1], 10) : 1;
+  return Number.isFinite(n) && n > 0 && n <= MAX_PLAUSIBLE_ITEM_QTY ? n : 1;
+};
+
+// Item-based counters for the delivered order's items.
+const tallyOrderItems = (items) => {
+  const tally = { cheese_pizzas: 0, sodas: 0, garlic_knot_orders: 0 };
+  if (!Array.isArray(items)) return tally;
+  let hasKnots = false;
+  for (const raw of items) {
+    const item = String(raw).toLowerCase();
+    const qty = itemQuantity(item);
+    if (/cheese pizza/.test(item)) tally.cheese_pizzas += qty;
+    if (/\bsodas?\b/.test(item)) tally.sodas += qty;
+    if (/garlic knot/.test(item)) hasKnots = true;
+  }
+  if (hasKnots) tally.garlic_knot_orders = 1;
+  return tally;
+};
+
+// Derived / contextual fields the catalog can reference that aren't stored
+// on the stats doc. `context` carries global values (e.g. the shared
+// pizzeria level) that live elsewhere.
+const statsView = (stats, context = {}) => ({
+  ...stats,
+  ...context,
+  unique_street_count: Array.isArray(stats.unique_streets) ? stats.unique_streets.length : 0,
+});
+
+/**
+ * Compare `stats` (+ `context`) against the catalog and return the catalog
+ * entries that are now satisfied and not yet in `unlockedIds`.
+ */
+const evaluateAchievements = (stats, unlockedIds, context = {}) => {
+  const view = statsView(stats, context);
+  const unlocked = new Set(unlockedIds);
+  return ACHIEVEMENTS.filter((a) => {
+    if (!a.stat || unlocked.has(a.id)) return false;
+    const value = view[a.stat];
+    if (!isFiniteNumber(value)) return false;
+    return a.op === 'lte' ? value <= a.threshold : value >= a.threshold;
+  });
+};
+
+// Write unlock docs for `newAchievements` inside `transaction`.
+const awardAchievements = (transaction, achievementsRef, newAchievements, uid) => {
+  for (const { id, title, description, icon } of newAchievements) {
+    transaction.set(achievementsRef.doc(id), {
+      id, title, description, icon,
+      unlocked_at: admin.firestore.FieldValue.serverTimestamp()
+    });
+    console.log(`Unlocked achievement ${id} for user ${uid}`);
+  }
+};
+
+// Read stats + unlocked achievements for a user inside a transaction.
+const readAchievementState = async (transaction, uid) => {
+  const statsRef = db.collection('users').doc(uid).collection('stats').doc('lifetime');
+  const achievementsRef = db.collection('users').doc(uid).collection('achievements');
+  const [statsDoc, unlockedDocs] = await Promise.all([
+    transaction.get(statsRef),
+    transaction.get(achievementsRef)
+  ]);
+  return {
+    statsRef,
+    achievementsRef,
+    stats: statsDoc.exists ? statsDoc.data() : {},
+    unlockedIds: unlockedDocs.docs.map((d) => d.id)
+  };
+};
+
+/**
+ * Merge `delta` into the user's lifetime stats and award any achievements
+ * that are now satisfied. `achState` comes from readAchievementState();
+ * `context` supplies non-persisted values for the catalog (see statsView).
+ * Must run after all reads in the transaction.
+ */
+const applyStatsDelta = (transaction, uid, achState, delta, context = {}) => {
+  const { statsRef, achievementsRef, stats, unlockedIds } = achState;
+  transaction.set(statsRef, delta, { merge: true });
+  awardAchievements(
+    transaction, achievementsRef,
+    evaluateAchievements({ ...stats, ...delta }, unlockedIds, context),
+    uid
+  );
+};
+
 // Initialize OpenAI client
 // We expect OPENAI_API_KEY and GOOGLE_API_KEY to be set in Firebase functions config
 // e.g., firebase functions:secrets:set OPENAI_API_KEY
@@ -721,7 +831,10 @@ exports.depositBank = onCall(async (request) => {
   const userRef = db.collection('users').doc(uid);
   try {
     return await db.runTransaction(async (tx) => {
-      const snap = await tx.get(userRef);
+      const [snap, achState] = await Promise.all([
+        tx.get(userRef),
+        readAchievementState(tx, uid)
+      ]);
       const data = snap.exists ? snap.data() : {};
       const bank = Number(data.bank_amount) || 0;
       const savings = Number(data.savings_amount) || 0;
@@ -734,6 +847,13 @@ exports.depositBank = onCall(async (request) => {
         savings_amount: newSavings,
         last_deposit: { amount: bank, at: admin.firestore.FieldValue.serverTimestamp() }
       }, { merge: true });
+
+      // Banker / Fort Knox
+      applyStatsDelta(tx, uid, achState, {
+        largest_deposit: Math.max(Number(achState.stats.largest_deposit) || 0, bank),
+        total_deposited: parseFloat(((Number(achState.stats.total_deposited) || 0) + bank).toFixed(2))
+      });
+
       return { success: true, deposited: bank, bank_amount: 0, savings_amount: newSavings };
     });
   } catch (error) {
@@ -833,9 +953,34 @@ exports.sweepExpiredOrders = onSchedule('every 10 minutes', async () => {
 });
 
 // Background function to process delivered orders and award achievements
+// Heavy Load: record how many orders the driver holds right after a claim.
+// Claims arrive as one batch commit, so the trigger for any order in the
+// batch sees the whole batch. This is a max, so retries are harmless.
+const recordActiveOrderPeak = async (userId) => {
+  const activeSnap = await activeOrdersQuery().where('user_id', '==', userId).get();
+  const activeCount = activeSnap.size;
+  await db.runTransaction(async (transaction) => {
+    const achState = await readAchievementState(transaction, userId);
+    const previous = Number(achState.stats.max_active_orders) || 0;
+    if (activeCount <= previous) return;
+    applyStatsDelta(transaction, userId, achState, { max_active_orders: activeCount });
+  });
+};
+
 exports.processOrderAchievements = onDocumentUpdated("orders/{orderId}", async (event) => {
   const orderBefore = event.data.before.data();
   const orderAfter = event.data.after.data();
+  const orderRef = event.data.after.ref;
+
+  // Claimed (queued -> en_route): only Heavy Load cares.
+  if (orderBefore.status === 'queued' && orderAfter.status === 'en_route' && orderAfter.user_id) {
+    try {
+      await recordActiveOrderPeak(orderAfter.user_id);
+    } catch (error) {
+      console.error('Error recording active-order peak:', error);
+    }
+    return;
+  }
 
   // Only process when an order transitions to 'delivered' status
   if (orderBefore.status !== 'delivered' && orderAfter.status === 'delivered') {
@@ -850,27 +995,56 @@ exports.processOrderAchievements = onDocumentUpdated("orders/{orderId}", async (
       // We process achievements and stats in a transaction to ensure consistency
       await db.runTransaction(async (transaction) => {
         // 1. Define Refs & Perform All Reads First
-        const statsRef = db.collection('users').doc(userId).collection('stats').doc('lifetime');
         const userRef = db.collection('users').doc(userId);
         const pizzeriaRef = db.collection('pizzeria').doc('finances');
-        const achievementsRef = db.collection('users').doc(userId).collection('achievements');
+        const inventoryRef = db.collection('pizzeria').doc('inventory');
 
-        const [statsDoc, pizzeriaDoc, unlockedDocs] = await Promise.all([
-          transaction.get(statsRef),
-          transaction.get(pizzeriaRef),
-          transaction.get(achievementsRef)
+        const [orderSnap, achState, pizzeriaDoc] = await Promise.all([
+          transaction.get(orderRef),
+          readAchievementState(transaction, userId),
+          transaction.get(pizzeriaRef)
         ]);
 
-        // 2. Process User's Lifetime Stats
-        let stats = statsDoc.exists ? statsDoc.data() : {
+        // Triggers are at-least-once: credit each delivery exactly once.
+        if (!orderSnap.exists || orderSnap.get('stats_credited') === true) {
+          console.log(`Order ${orderRef.id} already credited; skipping.`);
+          return;
+        }
+
+        // Pizzeria level: read now (before any writes) whether or not we level up.
+        const revenue = orderAfter.total_cost || 0;
+        const pizzeriaData = pizzeriaDoc.exists ? pizzeriaDoc.data() : null;
+        const currentLevel = pizzeriaData?.level || 1;
+        const newDeliveryCount = (pizzeriaData?.total_lifetime_deliveries || 0) + 1;
+        const newLevelInfo = pizzeriaData ? getLevelInfo(newDeliveryCount) : { level: 1 };
+        const leveledUp = pizzeriaData && newLevelInfo.level > currentLevel;
+        const invSnap = leveledUp ? await transaction.get(inventoryRef) : null;
+        const pizzeriaLevel = Math.max(currentLevel, newLevelInfo.level);
+
+        // 2. Build the lifetime-stats delta
+        const existing = achState.stats;
+        const stats = {
           total_deliveries: 0,
           total_distance_km: 0,
           unique_streets: [],
-          total_tips: 0
+          total_tips: 0,
+          night_deliveries: 0,
+          vip_deliveries: 0,
+          cheese_pizzas: 0,
+          sodas: 0,
+          garlic_knot_orders: 0,
+          fastest_delivery_min: null,
+          ...existing
         };
 
         stats.total_deliveries += 1;
         stats.total_tips += (orderAfter.tip || 0);
+        if (orderAfter.is_vip) stats.vip_deliveries += 1;
+
+        const tally = tallyOrderItems(orderAfter.items);
+        stats.cheese_pizzas += tally.cheese_pizzas;
+        stats.sodas += tally.sodas;
+        stats.garlic_knot_orders += tally.garlic_knot_orders;
 
         // Distance covered: straight-line pizzeria -> drop-off (a proxy; the
         // client doesn't report a track). Uses the real pizzeria location and
@@ -888,42 +1062,49 @@ exports.processOrderAchievements = onDocumentUpdated("orders/{orderId}", async (
           stats.unique_streets.push(street);
         }
 
-        // 3. Write Stats Back & Update User Bank
-        transaction.set(statsRef, stats, { merge: true });
+        // Timing. Speed Demon runs from pickup (date_claimed, written by the
+        // client claim as a server timestamp) — older orders without it fall
+        // back to date_placed. Night Owl uses the delivery time's local hour.
+        const deliveredMs = tsToMillis(orderAfter.date_delivered);
+        if (deliveredMs !== null) {
+          const startMs = tsToMillis(orderAfter.date_claimed) ?? tsToMillis(orderAfter.date_placed);
+          if (startMs !== null && deliveredMs >= startMs) {
+            const minutes = (deliveredMs - startMs) / 60000;
+            if (stats.fastest_delivery_min === null || minutes < stats.fastest_delivery_min) {
+              stats.fastest_delivery_min = minutes;
+            }
+          }
+          if (localHour(new Date(deliveredMs), NIGHT_OWL_TZ) < NIGHT_OWL_END_HOUR) {
+            stats.night_deliveries += 1;
+          }
+        } else {
+          console.warn(`Order ${orderRef.id} delivered without date_delivered; skipping timing stats.`);
+        }
+
+        // 3. Writes: mark credited, pay the driver, update the pizzeria
+        transaction.update(orderRef, { stats_credited: true });
 
         transaction.set(userRef, {
           bank_amount: admin.firestore.FieldValue.increment(orderAfter.tip || 0)
         }, { merge: true });
 
-        // Update Pizzeria Finances + Level Check
-        const revenue = orderAfter.total_cost || 0;
-
-        if (!pizzeriaDoc.exists) {
+        if (!pizzeriaData) {
           transaction.set(pizzeriaRef, {
             bank_balance: 1000 + revenue,
             level: 1,
             total_lifetime_deliveries: 1
           });
         } else {
-          const currentData = pizzeriaDoc.data();
-          const currentLevel = currentData.level || 1;
-          const newDeliveryCount = (currentData.total_lifetime_deliveries || 0) + 1;
-          const newLevelInfo = getLevelInfo(newDeliveryCount);
-
           const updateData = {
             bank_balance: admin.firestore.FieldValue.increment(revenue),
             total_lifetime_deliveries: admin.firestore.FieldValue.increment(1)
           };
 
           // Level up! Scale max capacity for all resources
-          if (newLevelInfo.level > currentLevel) {
+          if (leveledUp) {
             updateData.level = newLevelInfo.level;
             console.log(`Pizzeria leveled up to ${newLevelInfo.level}! Multiplier: ${newLevelInfo.multiplier}x`);
-
-            // Scale inventory max values
-            const inventoryRef = db.collection('pizzeria').doc('inventory');
-            const invSnap = await transaction.get(inventoryRef);
-            if (invSnap.exists) {
+            if (invSnap?.exists) {
               const invData = invSnap.data();
               const invUpdates = {};
               for (const [key, def] of Object.entries(resourcesData.resources)) {
@@ -938,57 +1119,9 @@ exports.processOrderAchievements = onDocumentUpdated("orders/{orderId}", async (
           transaction.set(pizzeriaRef, updateData, { merge: true });
         }
 
-        // 4. Check & Award Achievements
-        const unlockedIds = unlockedDocs.docs.map(d => d.id);
-        let newAchievements = [];
-
-        // Check: First Slice
-        if (stats.total_deliveries === 1 && !unlockedIds.includes('first_slice')) {
-          newAchievements.push({
-            id: 'first_slice',
-            title: 'First Slice',
-            description: 'Complete your very first delivery.',
-            icon: '🍕'
-          });
-        }
-
-        // Check: Pizza Tycoon
-        if (stats.total_deliveries >= 100 && !unlockedIds.includes('pizza_tycoon')) {
-          newAchievements.push({
-            id: 'pizza_tycoon',
-            title: 'Pizza Tycoon',
-            description: 'Complete 100 total deliveries.',
-            icon: '👑'
-          });
-        }
-
-        // Check: Speed Demon
-        if (!unlockedIds.includes('speed_demon')) {
-          if (orderAfter.date_placed && orderAfter.date_delivered) {
-            const placedTime = orderAfter.date_placed.toMillis ? orderAfter.date_placed.toMillis() : new Date(orderAfter.date_placed).getTime();
-            const deliveryTime = orderAfter.date_delivered.toMillis ? orderAfter.date_delivered.toMillis() : new Date(orderAfter.date_delivered).getTime();
-            const diffMinutes = (deliveryTime - placedTime) / (1000 * 60);
-
-            if (diffMinutes <= 5) {
-              newAchievements.push({
-                id: 'speed_demon',
-                title: 'Speed Demon',
-                description: 'Complete a delivery within 5 minutes of picking it up.',
-                icon: '⚡'
-              });
-            }
-          }
-        }
-
-        // Write any newly unlocked achievements
-        for (const achievement of newAchievements) {
-          const docRef = achievementsRef.doc(achievement.id);
-          transaction.set(docRef, {
-            ...achievement,
-            unlocked_at: admin.firestore.FieldValue.serverTimestamp()
-          });
-          console.log(`Unlocked achievement ${achievement.id} for user ${userId}`);
-        }
+        // 4. Stats + achievements. The pizzeria level is global, so it's
+        // passed as context rather than stored per user.
+        applyStatsDelta(transaction, userId, achState, stats, { pizzeria_level: pizzeriaLevel });
       });
 
     } catch (error) {
@@ -1024,14 +1157,16 @@ exports.restockInventory = onCall(async (request) => {
     }
   }
 
+  const uid = request.auth.uid;
   try {
     const result = await db.runTransaction(async (transaction) => {
       const financesRef = db.collection('pizzeria').doc('finances');
       const inventoryRef = db.collection('pizzeria').doc('inventory');
 
-      const [financesSnap, inventorySnap] = await Promise.all([
+      const [financesSnap, inventorySnap, achState] = await Promise.all([
         transaction.get(financesRef),
-        transaction.get(inventoryRef)
+        transaction.get(inventoryRef),
+        readAchievementState(transaction, uid)
       ]);
 
       const finances = financesSnap.exists ? financesSnap.data() : { bank_balance: 0 };
@@ -1064,6 +1199,11 @@ exports.restockInventory = onCall(async (request) => {
       transaction.update(inventoryRef, restockUpdates);
       transaction.update(financesRef, {
         bank_balance: admin.firestore.FieldValue.increment(-totalCost)
+      });
+
+      // Restock Run: one trip per successful restock call.
+      applyStatsDelta(transaction, uid, achState, {
+        restock_trips: (Number(achState.stats.restock_trips) || 0) + 1
       });
 
       return {

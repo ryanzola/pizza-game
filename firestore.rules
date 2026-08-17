@@ -81,7 +81,11 @@ service cloud.firestore {
         && resource.data.status == 'queued'
         && request.resource.data.user_id == request.auth.uid
         && request.resource.data.status == 'en_route'
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['user_id', 'status']);
+        // date_claimed is optional but, if present, must be the server time
+        // (client sends serverTimestamp()); it feeds the Speed Demon timer.
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['user_id', 'status', 'date_claimed'])
+        && (!('date_claimed' in request.resource.data.diff(resource.data).affectedKeys())
+            || request.resource.data.date_claimed == request.time);
 
       // Allow deleting queued, unclaimed orders (simulates other drivers taking them)
       allow delete: if isAuth() && resource.data.status == 'queued' && resource.data.user_id == null;

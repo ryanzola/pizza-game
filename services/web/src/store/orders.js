@@ -1,7 +1,7 @@
 import { getDistanceFromLatLonInM } from './storeUtils';
 import { isWithin, BASE_RADIUS_M } from './location';
 import { db, functions } from '../firebase/init';
-import { collection, doc, query, where, getDocs, writeBatch, onSnapshot } from 'firebase/firestore';
+import { collection, doc, query, where, getDocs, writeBatch, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 
 // Wait-time display only. Expiry itself is decided by Cloud Functions
@@ -167,7 +167,9 @@ const actions = {
         const orderRef = doc(db, 'orders', id);
         batch.update(orderRef, {
           status: 'en_route',
-          user_id: uid
+          user_id: uid,
+          // Pickup time for Speed Demon; the server measures from this.
+          date_claimed: serverTimestamp()
         });
       });
 
