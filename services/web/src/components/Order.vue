@@ -34,7 +34,16 @@
               {{ order.address ? `${order.address.number} ${order.address.street}` : order.address_name }}
             </p>
           </div>
-          <p class="text-sm text-gray-400 capitalize">{{ order.address ? order.address.town : order.town }}</p>
+          <div class="flex items-center gap-2">
+            <p class="text-sm text-gray-400 capitalize">{{ order.address ? order.address.town : order.town }}</p>
+            <!-- Distance & direction from the player (only while the order is live and we have a fix) -->
+            <span v-if="whereTo" class="inline-flex items-center gap-1 text-xs font-semibold text-blue-300 bg-blue-900/30 px-2 py-0.5 rounded-md">
+              <svg class="w-3 h-3" :style="{ transform: `rotate(${whereTo.bearing}deg)` }" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 2 L19 21 L12 17 L5 21 Z" />
+              </svg>
+              {{ whereTo.text }}
+            </span>
+          </div>
         </div>
         
         <div class="border-t border-gray-800 pt-3 flex justify-between items-center mt-1">
@@ -62,6 +71,7 @@
 import { computed } from 'vue';
 import { useStore } from 'vuex';
 import { useRouter } from 'vue-router';
+import { formatDistance, bearingToCompass } from '../store/storeUtils';
 
 const store = useStore();
 const router = useRouter();
@@ -121,6 +131,14 @@ const statusBadgeClasses = computed(() => {
     case 'cancelled': return 'bg-red-900/30 text-red-400';
     default: return 'bg-gray-800 text-gray-300';
   }
+});
+
+// Distance/bearing to this drop-off for live orders, when we have a fresh fix.
+const whereTo = computed(() => {
+  if (!['pending', 'en_route', 'queued'].includes(props.order.status)) return null;
+  const rel = store.getters['location/distanceTo'](props.order.latitude, props.order.longitude);
+  if (!rel) return null;
+  return { ...rel, text: `${formatDistance(rel.distance)} ${bearingToCompass(rel.bearing)}` };
 });
 
 const navigateToDetail = () => {

@@ -38,6 +38,7 @@
           <div class="flex flex-col">
             <p class="font-bold text-lg text-white capitalize">{{ order.address?.number }} {{ order.address?.street }}</p>
             <p class="text-sm text-gray-400 capitalize">{{ order.address?.town }}, NJ</p>
+            <p v-if="whereTo" class="text-sm font-semibold text-blue-300 mt-1">{{ whereTo }} from you</p>
           </div>
         </div>
       </div>
@@ -117,6 +118,7 @@ import { useStore } from 'vuex';
 import { ChevronLeftIcon } from '@heroicons/vue/24/solid';
 import { db } from '../firebase/init';
 import { doc, getDoc } from 'firebase/firestore';
+import { formatDistance, bearingToCompass } from '../store/storeUtils';
 
 const route = useRoute();
 const router = useRouter();
@@ -132,6 +134,12 @@ const mapUrl = computed(() => {
   const lat = order.value.latitude;
   const lon = order.value.longitude;
   return `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=16&size=640x320&scale=2&maptype=roadmap&style=feature:all|element:geometry|color:0x242f3e&style=feature:all|element:labels.text.stroke|color:0x242f3e&style=feature:all|element:labels.text.fill|color:0x746855&style=feature:road|element:geometry|color:0x38414e&style=feature:road|element:geometry.stroke|color:0x212a37&style=feature:road.highway|element:geometry|color:0x746855&style=feature:road.highway|element:geometry.stroke|color:0x1f2835&style=feature:water|element:geometry|color:0x17263c&markers=color:red|${lat},${lon}&key=${apiKey}`;
+});
+
+const whereTo = computed(() => {
+  if (!order.value || !['pending', 'en_route'].includes(order.value.status)) return null;
+  const rel = store.getters['location/distanceTo'](order.value.latitude, order.value.longitude);
+  return rel ? `${formatDistance(rel.distance)} ${bearingToCompass(rel.bearing)}` : null;
 });
 
 const formattedStatus = computed(() => {
