@@ -34,7 +34,7 @@ const store = createStore({
         started_at: null,
         ended_at: null
       },
-      version: '1.26.08.15'
+      version: '1.26.08.16'
     }
   },
   getters: {
