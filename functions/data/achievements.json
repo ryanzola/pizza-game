@@ -1,0 +1,37 @@
+{
+  "_comment": "Single source of truth for achievements. Awarded by functions/index.js (evaluateAchievements) from users/{uid}/stats/lifetime; displayed by services/web/src/views/Profile.vue. `stat` names a field on the lifetime stats doc, `threshold` the value to reach; `op` defaults to \"gte\" (\"lte\" for 'at most'). Entries without a `stat` are not awarded automatically.",
+  "achievements": [
+    { "id": "first_slice",   "title": "First Slice",   "description": "Complete your very first delivery.",            "icon": "🍕", "stat": "total_deliveries",   "threshold": 1 },
+    { "id": "regular",       "title": "Regular",       "description": "Complete 10 deliveries.",                        "icon": "🛵", "stat": "total_deliveries",   "threshold": 10 },
+    { "id": "pizza_tycoon",  "title": "Pizza Tycoon",  "description": "Complete 100 total deliveries.",                 "icon": "👑", "stat": "total_deliveries",   "threshold": 100 },
+    { "id": "legend",        "title": "Legend",        "description": "Complete 500 total deliveries.",                 "icon": "🏆", "stat": "total_deliveries",   "threshold": 500 },
+    { "id": "slice_of_life", "title": "Slice of Life", "description": "Complete 1,000 total deliveries.",               "icon": "🌟", "stat": "total_deliveries",   "threshold": 1000 },
+
+    { "id": "tipsy",         "title": "Tipsy",         "description": "Earn $100 in total tips.",                       "icon": "💰", "stat": "total_tips",         "threshold": 100 },
+    { "id": "big_tipper",    "title": "Big Tipper",    "description": "Earn $500 in total tips.",                       "icon": "💵", "stat": "total_tips",         "threshold": 500 },
+    { "id": "made_man",      "title": "Made Man",      "description": "Earn $1,000 in total tips.",                     "icon": "🤌", "stat": "total_tips",         "threshold": 1000 },
+
+    { "id": "road_warrior",  "title": "Road Warrior",  "description": "Cover 100 km on deliveries.",                    "icon": "🛣️", "stat": "total_distance_km",  "threshold": 100 },
+    { "id": "odometer",      "title": "Odometer",      "description": "Cover 500 km on deliveries.",                    "icon": "🚗", "stat": "total_distance_km",  "threshold": 500 },
+
+    { "id": "cartographer",  "title": "Cartographer",  "description": "Deliver to 25 unique streets.",                  "icon": "🗺️", "stat": "unique_street_count","threshold": 25 },
+    { "id": "globetrotter",  "title": "Globetrotter",  "description": "Deliver to 50 unique streets.",                  "icon": "🌍", "stat": "unique_street_count","threshold": 50 },
+
+    { "id": "speed_demon",   "title": "Speed Demon",   "description": "Complete a delivery within 5 minutes of picking it up.", "icon": "⚡", "stat": "fastest_delivery_min", "threshold": 5, "op": "lte" },
+    { "id": "night_owl",     "title": "Night Owl",     "description": "Complete 10 deliveries between midnight and 4 AM.", "icon": "🦉", "stat": "night_deliveries",   "threshold": 10 },
+    { "id": "heavy_load",    "title": "Heavy Load",    "description": "Have 5 or more active orders in your queue simultaneously.", "icon": "🏋️", "stat": "max_active_orders", "threshold": 5 },
+
+    { "id": "vip_treatment", "title": "VIP Treatment", "description": "Deliver 10 VIP orders.",                         "icon": "🎩", "stat": "vip_deliveries",     "threshold": 10 },
+    { "id": "garlic_breath", "title": "Garlic Breath", "description": "Deliver 25 orders that include garlic knots.",   "icon": "🧄", "stat": "garlic_knot_orders", "threshold": 25 },
+    { "id": "cheese_please", "title": "Cheese Please", "description": "Deliver 50 cheese pizzas.",                      "icon": "🧀", "stat": "cheese_pizzas",      "threshold": 50 },
+    { "id": "soda_jerk",     "title": "Soda Jerk",     "description": "Deliver 100 sodas.",                             "icon": "🥤", "stat": "sodas",              "threshold": 100 },
+
+    { "id": "banker",        "title": "Banker",        "description": "Deposit $500 in a single trip to the bank.",     "icon": "🏦", "stat": "largest_deposit",    "threshold": 500 },
+    { "id": "fort_knox",     "title": "Fort Knox",     "description": "Deposit $5,000 in total.",                       "icon": "🔐", "stat": "total_deposited",    "threshold": 5000 },
+    { "id": "restock_run",   "title": "Restock Run",   "description": "Make 10 restock trips to the depot or bakery.",  "icon": "📦", "stat": "restock_trips",      "threshold": 10 },
+    { "id": "level_up",      "title": "Level Up",      "description": "Grow the pizzeria to level 3.",                  "icon": "📈", "stat": "pizzeria_level",     "threshold": 3 },
+    { "id": "empire",        "title": "Empire",        "description": "Grow the pizzeria to level 5.",                  "icon": "🏛️", "stat": "pizzeria_level",     "threshold": 5 },
+
+    { "id": "the_flash",     "title": "The Flash",     "description": "Record a speed of 40 mph or greater while on a delivery. (Car only)", "icon": "🏎️" }
+  ]
+}

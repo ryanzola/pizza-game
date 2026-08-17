@@ -107,19 +107,12 @@
 import { computed } from 'vue';
 import { useStore } from 'vuex';
 import { useRouter } from 'vue-router';
+import achievementsData from '../../../../functions/data/achievements.json';
 
 const store = useStore();
 
-const ACHIEVEMENT_CATALOG = [
-  { id: 'first_slice', title: 'First Slice', description: 'Complete your very first delivery.', icon: '🍕' },
-  { id: 'pizza_tycoon', title: 'Pizza Tycoon', description: 'Complete 100 total deliveries.', icon: '👑' },
-  { id: 'speed_demon', title: 'Speed Demon', description: 'Complete a delivery within 5 minutes of picking it up.', icon: '⚡' },
-  { id: 'the_flash', title: 'The Flash', description: 'Record a speed of 40 mph or greater while on a delivery. (Car only)', icon: '🏎️' },
-  { id: 'tipsy', title: 'Tipsy', description: 'Earn $100 in total tips.', icon: '💰' },
-  { id: 'night_owl', title: 'Night Owl', description: 'Complete 10 deliveries between midnight and 4 AM.', icon: '🦉' },
-  { id: 'heavy_load', title: 'Heavy Load', description: 'Have 5 or more active orders in your queue simultaneously.', icon: '🏋️' },
-  { id: 'globetrotter', title: 'Globetrotter', description: 'Deliver to 50 unique streets.', icon: '🌍' },
-];
+// Shared with functions/index.js, which awards them server-side.
+const ACHIEVEMENT_CATALOG = achievementsData.achievements;
 
 const userName = computed(() => {
   const user = store.getters.user;
