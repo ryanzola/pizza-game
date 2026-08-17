@@ -24,6 +24,9 @@ const state = {
   orders: [],
   selected_orders: [],
   waitTime: baseWaitTime,
+  // Deliveries confirmed by the server that haven't been celebrated yet
+  // (DeliveryCelebration.vue shows them one at a time).
+  celebrations: [],
 }
 
 const mutations = {
@@ -62,6 +65,12 @@ const mutations = {
   REMOVE_QUEUED_ORDERS(state) {
     state.orders = state.orders.filter(order => order.status !== 'queued');
   },
+  PUSH_CELEBRATION(state, celebration) {
+    state.celebrations.push(celebration);
+  },
+  SHIFT_CELEBRATION(state) {
+    state.celebrations.shift();
+  },
 }
 
 const actions = {
@@ -94,6 +103,17 @@ const actions = {
         const { data } = await deliverOrderFn({ orderId: order.id, latitude, longitude, accuracy });
         if (data?.success) {
           commit('UPDATE_ORDER_STATUS', { orderId: order.id, status: 'delivered' });
+          if (!data.alreadyDelivered) {
+            const remaining = state.selected_orders.filter(o => ['pending', 'en_route'].includes(o.status)).length;
+            commit('PUSH_CELEBRATION', {
+              id: order.id,
+              address: order.address ? `${order.address.number} ${order.address.street}` : order.address_name || '',
+              town: order.address?.town || order.town || '',
+              tip: Number(order.tip) || 0,
+              is_vip: !!order.is_vip,
+              remaining,
+            });
+          }
         } else if (data?.reason && data.reason !== 'too_far') {
           // too_far is routine at the edge of the pre-check radius; log the rest.
           console.warn(`Delivery for ${order.id} not accepted: ${data.reason}`, data);
@@ -240,6 +260,7 @@ const getters = {
   orders: state => state.orders,
   selectedOrders: state => state.selected_orders,
   orderById: state => id => state.orders.find(o => o.id === id),
+  currentCelebration: state => state.celebrations[0] ?? null,
 }
 
 export default {

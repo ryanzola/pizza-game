@@ -7,9 +7,11 @@
         @click="clickable ? navigateToDetail() : null"
         class="relative flex flex-col gap-3 p-4 bg-[#1c1c1e] border-2 shadow-sm rounded-2xl cursor-pointer transition-all duration-200"
         :class="[
-          clickable 
-            ? 'border-gray-800 hover:border-gray-700 active:scale-[0.98] active:bg-[#252528]' 
-            : 'border-gray-800 hover:border-gray-700 peer-checked:border-blue-500 peer-checked:bg-blue-900/20 peer-checked:ring-4 peer-checked:ring-blue-900/30'
+          highlight
+            ? 'border-green-500 bg-green-900/15 ring-4 ring-green-900/30'
+            : clickable 
+              ? 'border-gray-800 hover:border-gray-700 active:scale-[0.98] active:bg-[#252528]' 
+              : 'border-gray-800 hover:border-gray-700 peer-checked:border-blue-500 peer-checked:bg-blue-900/20 peer-checked:ring-4 peer-checked:ring-blue-900/30'
         ]">
       
         <!-- Selection Indicator (only in selection mode) -->
@@ -86,6 +88,11 @@ const props = defineProps({
     default: false
   },
   clickable: {
+    type: Boolean,
+    default: false
+  },
+  // Just-delivered flash (green) while the card lingers in the Active list.
+  highlight: {
     type: Boolean,
     default: false
   }
