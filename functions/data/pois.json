@@ -4,5 +4,5 @@
   "depot":    { "name": "Restaurant Depot", "latitude": 40.868516031424704, "longitude": -74.04757385194837 },
   "bank":     { "name": "Bank", "latitude": 40.86082582150665, "longitude": -74.07959384969016 },
   "bakery":   { "name": "Bakery", "latitude": 40.87485155936898, "longitude": -74.10014034710848 },
-  "geocodeFallback": { "name": "Fallback delivery point used when geocoding fails", "latitude": 40.8262, "longitude": -74.0660 }
+  "geocodeFallback": { "name": "Fallback delivery point used when geocoding fails", "latitude": 40.87403671114163, "longitude": -74.0672294182724 }
 }
