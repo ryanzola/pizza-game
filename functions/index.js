@@ -105,6 +105,11 @@ const getLatLon = async (addressStr) => {
       const lon = data.results[0].geometry.location.lng;
       return { lat, lon };
     }
+    // ZERO_RESULTS is a bad address; anything else (REQUEST_DENIED,
+    // OVER_QUERY_LIMIT, ...) means the key/config is broken and every order
+    // will silently land on the fallback coordinate — make that visible.
+    const logFn = data.status === "ZERO_RESULTS" ? console.warn : console.error;
+    logFn(`Geocoding failed for "${addressStr}": ${data.status}${data.error_message ? ` — ${data.error_message}` : ''}`);
     return null;
   } catch (error) {
     console.error("Error fetching geocoding data:", error.message);
@@ -380,7 +385,10 @@ exports.generateOrderBatch = onCall(
       }
       if (picks.length === 0) {
         // Geocoder unavailable: keep the game playable with one fallback order.
+        console.error(`generateOrderBatch: geocoding failed for all ${batchSize} slots; falling back to a single order at the fallback coordinate. Check GOOGLE_API_KEY has the Geocoding API enabled.`);
         picks.push({ addressObj: getRandomAddress(), lat: POIS.geocodeFallback.latitude, lon: POIS.geocodeFallback.longitude });
+      } else if (picks.length < batchSize) {
+        console.warn(`generateOrderBatch: only ${picks.length}/${batchSize} addresses geocoded.`);
       }
 
       const orderPromises = picks.map(({ addressObj, lat, lon }) => (async () => {
