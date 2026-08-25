@@ -1,4 +1,8 @@
-const CACHE_VERSION = 'v1';
+// __BUILD_ID__ is replaced with a unique id by the stampServiceWorker plugin
+// in vite.config.js. A changed byte here is what makes browsers see a "new"
+// service worker on each deploy, which triggers the auto-update reload in
+// main.js. In dev it stays as-is, which is fine.
+const CACHE_VERSION = '__BUILD_ID__';
 
 // Immediately take control on install
 self.addEventListener('install', function(event) {
