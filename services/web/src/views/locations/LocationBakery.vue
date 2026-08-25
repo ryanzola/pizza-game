@@ -59,7 +59,7 @@
     </div>
 
     <!-- Bottom Action Bar -->
-    <div class="sticky mt-auto bottom-0 left-0 right-0 z-40 bg-gradient-to-t from-[#FAEDDF] via-[#FAEDDF]/95 to-transparent pb-safe pt-8 px-4 rounded-t-3xl -mx-4">
+    <div class="sticky mt-auto bottom-0 left-0 right-0 z-40 bg-gradient-to-t from-[#FAEDDF] via-[#FAEDDF]/95 to-transparent pt-8 px-4 rounded-t-3xl -mx-4">
       <div class="max-w-md mx-auto pb-4">
         <!-- Balance info -->
         <div v-if="breadDeficit > 0" class="flex justify-between items-center mb-3 text-sm font-sans">
@@ -166,9 +166,6 @@ const restockBread = async () => {
     border-b-4 border-[#B07B46];
 }
 
-.pb-safe {
-  padding-bottom: env(safe-area-inset-bottom, 1rem);
-}
 
 .bakery-fade-enter-active {
   animation: bakery-in 0.3s ease-out;

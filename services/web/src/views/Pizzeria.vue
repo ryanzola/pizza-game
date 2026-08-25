@@ -227,7 +227,4 @@ const stockStatusLabel = computed(() => {
     select-none;
 }
 
-.pb-safe {
-  padding-bottom: env(safe-area-inset-bottom, 1rem);
-}
 </style>

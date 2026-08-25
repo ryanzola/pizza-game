@@ -58,7 +58,7 @@
     </div>
 
     <!-- Bottom Action Bar -->
-    <div class="sticky mt-auto bottom-0 left-0 right-0 z-40 bg-[#0a0a0a]/95 backdrop-blur-xl border-t-2 border-[#ff3b30] pb-safe pt-5 px-4 rounded-t-none -mx-4">
+    <div class="sticky mt-auto bottom-0 left-0 right-0 z-40 bg-[#0a0a0a]/95 backdrop-blur-xl border-t-2 border-[#ff3b30] pt-5 px-4 rounded-t-none -mx-4">
       <div class="max-w-md mx-auto pb-4">
         <!-- Cart Summary -->
         <div class="flex justify-between items-center mb-3 font-mono text-sm">
@@ -252,9 +252,6 @@ const purchaseSupply = async () => {
     );
 }
 
-.pb-safe {
-  padding-bottom: env(safe-area-inset-bottom, 1rem);
-}
 
 .flash-enter-active {
   animation: flash-in 0.3s ease-out;

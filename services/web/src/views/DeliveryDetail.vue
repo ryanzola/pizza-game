@@ -100,7 +100,7 @@
     </div>
 
     <!-- Sticky Bottom Action -->
-    <div v-if="order" class="sticky mt-auto bottom-0 left-0 right-0 z-40 bg-[#121212]/90 backdrop-blur-xl border-t border-gray-800 pb-safe pt-3 px-4 rounded-t-3xl">
+    <div v-if="order" class="sticky mt-auto bottom-0 left-0 right-0 z-40 bg-[#121212]/90 backdrop-blur-xl border-t border-gray-800 pt-3 px-4 rounded-t-3xl">
       <div class="max-w-md mx-auto flex flex-col gap-2 pb-4">
         <button @click="openInMaps" class="action-btn bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white shadow-lg shadow-blue-500/30">
           <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
@@ -229,7 +229,4 @@ onMounted(async () => {
     select-none;
 }
 
-.pb-safe {
-  padding-bottom: env(safe-area-inset-bottom, 1rem);
-}
 </style>

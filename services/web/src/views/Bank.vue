@@ -60,7 +60,7 @@
     </div>
 
     <!-- Sticky Bottom Action Bar -->
-    <div class="sticky mt-auto bottom-0 left-0 right-0 z-40 bg-[#121212]/90 backdrop-blur-xl border-t border-gray-800 pb-safe pt-3 px-4 rounded-t-3xl">
+    <div class="sticky mt-auto bottom-0 left-0 right-0 z-40 bg-[#121212]/90 backdrop-blur-xl border-t border-gray-800 pt-3 px-4 rounded-t-3xl">
       <div class="max-w-md mx-auto flex flex-col gap-2 pb-4">
         <button 
           v-if="debug_mode || isNearBank" 
@@ -147,7 +147,4 @@ const deposit = async () => {
     select-none;
 }
 
-.pb-safe {
-  padding-bottom: env(safe-area-inset-bottom, 1rem);
-}
 </style>
