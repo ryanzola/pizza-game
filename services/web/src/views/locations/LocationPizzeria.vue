@@ -1,5 +1,6 @@
 <template>
-  <div class="px-4 pt-6 space-y-4 flex flex-col flex-1 pb-6 w-full">
+  <!-- Extra bottom padding when the fixed action bar is shown so the last card can scroll clear of it. -->
+  <div class="px-4 pt-6 space-y-4 flex flex-col flex-1 w-full" :class="selected.length > 0 || $store.state.debug_mode ? 'pb-32' : 'pb-6'">
     <div class="flex justify-between items-end mb-2">
       <h1 class="text-2xl font-bold tracking-tight text-white">Active Orders</h1>
       <p v-if="isGenerating" class="text-sm font-medium text-blue-400 animate-pulse">Generating orders…</p>
@@ -45,9 +46,11 @@
       </div>
     </ul>
 
-    <!-- Bottom Action Bar -->
-    <!-- Rendered only when it has content; otherwise it's an empty shelf covering the list. -->
-    <div v-if="selected.length > 0 || $store.state.debug_mode" class="sticky mt-auto bottom-0 left-0 right-0 z-40 bg-[#121212]/90 backdrop-blur-xl border-t border-gray-800 pb-safe pt-3 px-4 rounded-t-3xl -mx-4">
+    <!-- Bottom Action Bar. Fixed just above the navbar (h-[88px]: pt-6 + 24px
+         icons + pb-10) so it never rides behind the nav mid-scroll the way
+         sticky did. Rendered only when it has content; otherwise it's an
+         empty shelf covering the list. -->
+    <div v-if="selected.length > 0 || $store.state.debug_mode" class="fixed bottom-[88px] left-0 right-0 z-40 bg-[#121212]/90 backdrop-blur-xl border-t border-gray-800 pt-3 px-4 rounded-t-3xl">
       <div class="max-w-md mx-auto flex flex-col gap-2 pb-4">
         <!-- Debug Controls: only show in debug mode -->
         <div v-if="selected.length === 0 && $store.state.debug_mode" class="flex gap-2">
@@ -160,17 +163,13 @@ const clearQueuedOrders = () => {
   @apply 
     relative 
     flex items-center justify-center
-    w-full 
-    h-[56px]
-    rounded-2xl
+    w-full
+    py-2.5
+    rounded-xl
     transition-all duration-200
     active:scale-[0.97]
     active:opacity-80
     focus:outline-none
     select-none;
-}
-
-.pb-safe {
-  padding-bottom: env(safe-area-inset-bottom, 1rem);
 }
 </style>
