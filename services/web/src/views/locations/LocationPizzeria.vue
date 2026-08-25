@@ -47,7 +47,9 @@
 
     <!-- Bottom Action Bar -->
     <!-- Rendered only when it has content; otherwise it's an empty shelf covering the list. -->
-    <div v-if="selected.length > 0 || $store.state.debug_mode" class="sticky mt-auto bottom-0 left-0 right-0 z-40 bg-[#121212]/90 backdrop-blur-xl border-t border-gray-800 pb-safe pt-3 px-4 rounded-t-3xl -mx-4">
+    <!-- -mx-4/-mb-6 cancel the page container's padding so the bar sits flush
+         against the navbar instead of floating above it. -->
+    <div v-if="selected.length > 0 || $store.state.debug_mode" class="sticky mt-auto bottom-0 left-0 right-0 z-40 bg-[#121212]/90 backdrop-blur-xl border-t border-gray-800 pb-safe pt-3 px-4 rounded-t-3xl -mx-4 -mb-6">
       <div class="max-w-md mx-auto flex flex-col gap-2 pb-4">
         <!-- Debug Controls: only show in debug mode -->
         <div v-if="selected.length === 0 && $store.state.debug_mode" class="flex gap-2">
